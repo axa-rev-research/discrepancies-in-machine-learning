@@ -8,10 +8,10 @@ from sklearn.datasets import load_breast_cancer, load_wine, fetch_20newsgroups_v
 RANDOM_STATE = 42
 
 def get_dataset(dataset='half-moons',
-                n_samples=100,
+                n_samples=200,
                 test_size=0.33,
                 standardize=True,
-                noise=0.3):
+                noise=0.6):
     """
     dataset: str, name of the dataset to load in {'breast-cancer', 'half-moons'}
     n_samples: int, number of instances to return in total (train+test). For synthetic datasets, number of generated instances. For real datasets, number of randomly drawn instances.

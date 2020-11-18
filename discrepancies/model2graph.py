@@ -1,4 +1,4 @@
-from itertools import product
+from itertools import product, combinations
 from heapq import heappush, heappop
 import logging
 
@@ -241,6 +241,11 @@ class model2graph:
         preds = preds.reshape((xx.shape[0], yy.shape[1]))
         plt.contour(xx,yy,preds)
 
+        left, right = plt.xlim()
+        plt.xlim((left*1.1, right*1.1))
+        bottom, top = plt.ylim()
+        plt.ylim((bottom*1.1, top*1.1))
+
 
     def plot_m2g(self):
         """
@@ -287,21 +292,74 @@ class pool2graph:
 
 
         # 2. Generate a graph that summarizes discrepancies
-        """
-        # Initialize the pool graph with nodes being each point of the training set Xtrain
         self.G = nx.Graph()
 
-        self._euclidean_distances_X = euclidean_distances(self.Xtrain)
-        # For each point of Xtrain get a pd.DataFrame with the prediction of each model of the pool
-        self._preds = self.pool.predict(self.Xtrain)
+        # 2.1 Get all nodes generated from the training set
 
-        for x in range(len(self.Xtrain)):
-            self.add_node(x, self._preds.iloc[x], self.Xtrain.iloc[x], None, None)
+        # Use any m2g to get data shared across all the m2g
+        _m2g = self.Gs[list(self.Gs.keys())[0]]
 
-        #tmp = [(n1,n2, {'distance':self._euclidean_distances_X[n1,n2]}) for n1,n2 in product(self.G.nodes, self.G.nodes) if (n1 != n2) and (self.G.nodes[n1]['pred'] != self.G.nodes[n2]['pred'])]
-        tmp = [(n1,n2, {'distance':self._euclidean_distances_X[n1,n2]}) for n1,n2 in product(self.G.nodes, self.G.nodes) if (n1 != n2)]
-        self.G.add_edges_from(tmp)
+        Xtrain_pairs = [(n1,n2) for n1,n2 in combinations(_m2g.Xtrain_nodes, 2) if (n1 != n2)]
+
+        # 2.2 For every pair of nodes generated from the training set
+
+        for n1,n2 in Xtrain_pairs[:]:
+
+            Xtrain_pair_touchpoints_features = np.empty(shape=(0,_m2g.Xtrain.shape[1]))
+            Xtrain_pair_touchpoints_models = []
+
+            # 2.2.1 For every models in the pool
+            for k,m2g in self.Gs.items():
+
+                # 2.2.2 Get all the touchpoints between the pair of nodes
+                _Xtrain_pair_touchpoints = [x for x,y in m2g.G.nodes(data=True) if y['Xtrain_origin']==[n1,n2] and y['touchpoint']==True]
+
+                if len(_Xtrain_pair_touchpoints)==0:
+                    continue
+
+                tmp = np.array([m2g.G.nodes[n]['features'] for n in _Xtrain_pair_touchpoints])
+                
+                Xtrain_pair_touchpoints_features = np.concatenate((Xtrain_pair_touchpoints_features, tmp), axis=0)
+
+                Xtrain_pair_touchpoints_models = Xtrain_pair_touchpoints_models+ [k]*len(tmp)
+
+            # Add all the touchpoints between the pair on an edge in the graph
+            self.G.add_node(n1, features=m2g.G.nodes[n1]['features'])
+            self.G.add_node(n2, features=m2g.G.nodes[n2]['features'])
+
+            Xtrain_pair_touchpoints_models = np.array(Xtrain_pair_touchpoints_models)
+            tmp = [(n1,n2, {'Xtrain_pair_touchpoints_models':Xtrain_pair_touchpoints_models, 'Xtrain_pair_touchpoints_features':Xtrain_pair_touchpoints_features, 'distance':m2g._euclidean_distances_X[n1,n2]})]
+
+            self.G.add_edges_from(tmp)
 
 
-        # 3. For each edge between 2 points of Xtrain, add 'touchpoints' for every models of the pool
+    def get_local_discrepancies(self, i, k=10):
         """
+        Return the discrepancies for an instance.
+        Starting from the instance to explain, get k closest points of the training set and retrieve the discrepancies along the segments (edges)
+
+        For now, i is the index in Xtrain. Then, the method should accept an instance and either (1) attached it to the closest point of the training set or (2) learn specific edges for it
+        """
+
+        pairs = np.array(list(self.G.edges(i)))
+        pairs_dist = [self.G.edges[(i,j)]['distance'] for i,j in self.G.edges(i)]
+        pairs_k = pairs[np.argsort(pairs_dist)][:k]
+
+        ax = plt.subplot()
+
+        for pair in pairs_k:
+
+            Xtrain_pair_touchpoints_features = self.G.edges[pair]['Xtrain_pair_touchpoints_features']
+
+            u = self.G.nodes[pair[0]]['features']
+            v = self.G.nodes[pair[1]]['features']
+
+            u_closest = Xtrain_pair_touchpoints_features[np.argsort(euclidean_distances(u.to_frame().T, Xtrain_pair_touchpoints_features))][0][0]
+
+            v_closest = Xtrain_pair_touchpoints_features[np.argsort(euclidean_distances(v.to_frame().T, Xtrain_pair_touchpoints_features))][0][0]
+
+            nodes = pd.concat((u,v), axis=1).T
+            touchpoints = pd.DataFrame(np.array([u_closest,v_closest]))
+
+            nodes.plot(kind='scatter', x=0, y=1, ax=ax)
+            touchpoints.plot(kind='scatter', x=0, y=1, c='r', ax=ax)
