@@ -262,7 +262,7 @@ class model2graph:
             plt.scatter(tmp[:,0][preds==c], tmp[:,1][preds==c], marker='x')
 
 
-class pool2graph:
+class pool2graph_DEPRECATED:
 
     def __init__(self, Xtrain, Ytrain, pool):
         """
@@ -345,8 +345,6 @@ class pool2graph:
         pairs_dist = [self.G.edges[(i,j)]['distance'] for i,j in self.G.edges(i)]
         pairs_k = pairs[np.argsort(pairs_dist)][:k]
 
-        ax = plt.subplot()
-
         for pair in pairs_k:
 
             Xtrain_pair_touchpoints_features = self.G.edges[pair]['Xtrain_pair_touchpoints_features']
@@ -358,8 +356,8 @@ class pool2graph:
 
             v_closest = Xtrain_pair_touchpoints_features[np.argsort(euclidean_distances(v.to_frame().T, Xtrain_pair_touchpoints_features))][0][0]
 
-            nodes = pd.concat((u,v), axis=1).T
-            touchpoints = pd.DataFrame(np.array([u_closest,v_closest]))
+            # nodes = pd.concat((u,v), axis=1).T
+            # touchpoints = pd.DataFrame(np.array([u_closest,v_closest]))
 
-            nodes.plot(kind='scatter', x=0, y=1, ax=ax)
-            touchpoints.plot(kind='scatter', x=0, y=1, c='r', ax=ax)
+            # nodes.plot(kind='scatter', x=0, y=1, fig=fig)
+            # touchpoints.plot(kind='scatter', x=0, y=1, c='r', fig=fig)
