@@ -1,11 +1,11 @@
 from itertools import product, combinations, chain
+import toolz
 from heapq import heappush, heappop
 import logging
 
 import numpy as np
 import pandas as pd
 
-from sklearn.metrics.pairwise import euclidean_distances
 from sklearn.neighbors import NearestNeighbors
 from sklearn.manifold import TSNE
 
@@ -23,13 +23,14 @@ logging.getLogger().setLevel(logging.INFO)
 
 class pool2graph:
 
-    def __init__(self, Xtrain, Ytrain, pool, k=10):
+    def __init__(self, Xtrain, Ytrain, pool, k=10, k_refinement_edges=0):
 
         self.Xtrain = Xtrain
         self.Ytrain = Ytrain
         self.pool = pool
 
         self.k = k
+        self.k_refinement_edges = k_refinement_edges
 
         self.G = nx.Graph()
         self.n_epoch = 0
@@ -70,42 +71,26 @@ class pool2graph:
         
         #_euclidean_distances_X = euclidean_distances(self.Xtrain)
         _preds = self.pool.predict(self.Xtrain)
+        _preds.index = self.Xtrain.index
         _discrepancies = self.pool.predict_discrepancies(self.Xtrain)
+        _discrepancies.index = self.Xtrain.index
 
         ## Create nodes from Xtrain and add them to the graph
 
         _nodes = [(i,
-                {"features":self.Xtrain.iloc[i],
-                "pool_predictions":_preds.iloc[i], "discrepancies":_discrepancies.iloc[i],
-                "y_true":self.Ytrain.iloc[i],
+                {"features":self.Xtrain.loc[i],
+                "pool_predictions":_preds.loc[i], "discrepancies":_discrepancies.loc[i],
+                "y_true":self.Ytrain.loc[i],
                 "ground_truth":True,
-                "Xtrain_index":self.Xtrain.index[i]})
-                for i in range(self.Xtrain.shape[0])]
+                "Xtrain_index":i})
+                for i in self.Xtrain.index]
 
         self.G.add_nodes_from(_nodes)
 
         ## Create edges and add them to the graph
 
-        # n_neighbors=self.k+1 because "the query set matches the training set, the nearest neighbor of each point is the point itself, at a distance of zero." (sklearn documentation)
-        _NN = NearestNeighbors(n_neighbors=self.k+1, algorithm='auto')
-        _NN = _NN.fit(self.Xtrain)
-        _distances, _indices = _NN.kneighbors(self.Xtrain)
-
-        # Generate pairs of nodes to be connected by an edge
-        indices_distances = np.stack((_indices, _distances), axis=2)
-        iterables = [product([i], indices_distances[i][1:]) for i in range(len(indices_distances))]
-        _edges = list(chain(*iterables))
-
-        # Reformat: [(node1,node2), edge_length]
-        _edges = [[(_edges[i][0],_edges[i][1][0]),_edges[i][1][1]] for i in range(len(_edges))]
-
-        # Remove duplicate edges (if tuple-edge in both directions)
-        _edges = list({tuple(row) for row in _edges})
-        _edges = np.vstack(_edges)
-
-        # Add edges to the graph
-        tmp = [(n1,n2, {'distance':d}) for (n1,n2),d in _edges]
-        self.G.add_edges_from(tmp)
+        _edges = self.get_edges_kneighbors()
+        self.G.add_edges_from(_edges)
 
         # Graph refinement
         if self.n_epoch < max_epochs:
@@ -123,22 +108,75 @@ class pool2graph:
         for n_epoch in tqdm(range(max_epochs)):
 
             sum_distances = self.get_sum_distances()
-            # If not the first iteration (!= None) and if the sum_distances decrease at at least at the following pace: sum_distances lower than previous_sum_distances*stopping_criterion, where stopping_criterion is expressed in %
-            if (previous_sum_distances != None) and (previous_sum_distances*stopping_criterion < sum_distances):
+
+            # If not the first iteration (previous_sum_distances != None) and if the sum_distances decreases at least at the following pace: (previous_sum_distances - sum_distances) / previous_sum_distances)< stopping_criterion, where stopping_criterion is expressed in %
+            # TODO: not a good stoppping criterion. When self.k_refinement_edges>0, we add many edges at each iteration => the overall distance increases
+            if (previous_sum_distances != None) and (np.abs(previous_sum_distances - sum_distances) / previous_sum_distances) < stopping_criterion:
                 break
             else:
                 previous_sum_distances = sum_distances
 
-            print("### EPOCH #"+str(n_epoch)+" - Sum of distances ="+str(sum_distances))
+            logging.info("### EPOCH #"+str(n_epoch)+" - Sum of distances ="+str(sum_distances)+"\n")
 
             self.n_epoch = n_epoch
             
             self._refine_graph()
 
-        # Indicates that precomputed information (e.g. subgraphs of discrepancies) needs to be updated
+        # Indicates that precomputed information (e.g. subgraphs of discrepancies) needs to be updated because the graph has changed
         self._precomputed_data_deprecated = True
 
         return self
+
+
+    def get_edges_kneighbors(self, lnodes=None, k=None):
+        """Returns the edges between each node and its k nearest nodes in the graph. If lnodes is None, all the edges between every node of the graph and their k nearest nodes are returned. If lnodes is a list of nodes (by their index), the method returns the edges between the lnodes only and their k nearest nodes.
+
+        Parameters
+        ----------
+        lnodes : None or list
+            If None (default), the method returns the edges for all the nodes with their k nearest nodes. If lnodes is a list of nodes (by their index), the edges for the lnodes with their k nearest nodes is returned
+
+        k : None or int
+            Number of nearest neighbors to search. If None (default), use self.k or can be manually defined (int).
+
+        Returns
+        -------
+        _edges : np.array
+            Array of Networkx edges (NOT added to the graph self.G: they NEED to be added to the graph self.G)
+        """
+
+        # Get features from all nodes of the graph
+        nodes = self.G.nodes(data=True)
+        nodes_features = {n[0]:n[1]['features'] for n in nodes}
+        nodes_features = pd.concat(nodes_features, axis=1).T
+
+        if k is None:
+            k = self.k
+
+        # n_neighbors=self.k+1 because "the query set matches the training set, the nearest neighbor of each point is the point itself, at a distance of zero." (sklearn documentation)
+        _NN = NearestNeighbors(n_neighbors=k+1, algorithm='auto')
+        _NN = _NN.fit(nodes_features)
+
+        if lnodes is None:
+            lnodes = nodes_features.index
+
+        _distances, _indices = _NN.kneighbors(nodes_features.loc[lnodes])
+        _indices = nodes_features.index[_indices]
+
+        # Generate pairs of nodes to be connected by an edge
+        indices_distances = np.stack((_indices, _distances), axis=2)
+        iterables = [product([nodes_features.index[i]], indices_distances[i][1:]) for i in range(len(indices_distances))]
+        _edges = list(chain(*iterables))
+        
+        # Reformat, with standard edge format: (node1,node2, {'distance':edge_length})
+        _edges = [(_edges[i][0],_edges[i][1][0],{'distance':_edges[i][1][1]}) for i in range(len(_edges))]
+
+        # Remove duplicate edges (if tuple-edge in both directions)
+        # _edges = list({tuple(row) for row in _edges})
+        # _edges = np.vstack(_edges)
+        _edges = self.unique_edges(_edges)
+
+        return _edges
 
 
     def _refine_graph(self):
@@ -195,17 +233,38 @@ class pool2graph:
         new_nodes = []
         for i in range(len(w)):
             self.new_nodes_index += -1
-            new_node = (self.G.number_of_nodes()+i, {'pool_predictions':w_preds.iloc[i], 'features':w.iloc[i], 'discrepancies':w_discrepancies.iloc[i], 'y_true':None, 'ground_truth':False, "Xtrain_index":self.new_nodes_index})
+
+            new_node = (self.new_nodes_index,
+            {'pool_predictions':w_preds.iloc[i],
+            'features':w.iloc[i],
+            'discrepancies':w_discrepancies.iloc[i],
+            'y_true':None,
+            'ground_truth':False,
+            'Xtrain_index':self.new_nodes_index})
 
             new_nodes.append(new_node)
+
         new_nodes = np.array(new_nodes)
 
         self.G.add_nodes_from(new_nodes)
 
+        # Format, with standard edge format: (node1,node2, {'distance':edge_length})
         new_edges1 = [(to_refine[i,1][0], new_nodes[i,0], {'distance':d_uw[i]}) for i in range(len(new_nodes))]
         new_edges2 = [(to_refine[i,1][1], new_nodes[i,0], {'distance':d_vw[i]}) for i in range(len(new_nodes))]
 
-        new_edges = np.array(new_edges1+new_edges2)
+        # If the option to add edges with the k nearest nodes of the new nodes
+        k_edges = []
+        if self.k_refinement_edges>0:
+            # Get index (in the graph) of the new nodes
+            new_nodes_index = [n[0] for n in new_nodes]
+            # Compute the self.k_refinement_edges nearest nodes of the new nodes
+            k_edges = self.get_edges_kneighbors(lnodes=new_nodes_index, k=self.k_refinement_edges)
+
+        #new_edges = np.array(new_edges1+new_edges2+k_edges)
+        new_edges = new_edges1+new_edges2+k_edges
+
+        # Remove duplicate edges (if tuple-edge in both directions)
+        new_edges = self.unique_edges(new_edges)
 
         self.G.add_edges_from(new_edges)
 
@@ -218,13 +277,33 @@ class pool2graph:
             if self._edge_selection(e):
                 heappush(self.heapq, (-new_edges[i][2]['distance'], e))
 
-        # Indicates that precomputed information (e.g. subgraphs of discrepancies) needs to be updated - because graph has just been refined
+        # Indicates that precomputed information (e.g. subgraphs of discrepancies) needs to be updated because the graph has changed
         self._precomputed_data_deprecated = True
 
 
-    #############################################
-    ## Extract information from the graph
-    #############################################
+    def unique_edges(self, edges):
+        """Return a list of edges where each edge is unique, no matter the direction (u,v)=(v,u): the pair of nodes u,v will have a unique edge no matter the order.
+
+        Parameters
+        ----------
+        edges : list
+            List of edges to "uniqueify", edge with the standard format ((node1, node2), {'distance':distance_float})
+
+        Returns
+        -------
+        _edges : list
+            List of unique edge, with the standard format (node1, node2, {'distance':distance_float})
+        """
+
+        def edge_uniqueness(e):
+            return tuple(sorted([e[0],e[1]]))
+
+        _edges = []
+        for e in toolz.unique(edges, key=edge_uniqueness):
+            _edges.append(e)
+
+        return _edges
+
 
     def _edge_selection(self, e, policy='discrepancy+differentPredictions'):
         """Return True if a graph's edge in input should be refined (i.e. edge being split to better locate area of discrepancies).
@@ -252,6 +331,9 @@ class pool2graph:
 
         return selected
 
+    #############################################
+    ## Extract information from the graph
+    #############################################
 
     def get_sum_distances(self):
         """Return the sum of edges' distances for edges that respect the selection criterion (nodes with discrepancies, nodes with opposite class predictions).
@@ -442,6 +524,7 @@ class pool2graph:
             ldf_embedded = self._cache['ldf_embedded']
 
         return ldf_embedded
+
 
     def plot_db(self):
         """
