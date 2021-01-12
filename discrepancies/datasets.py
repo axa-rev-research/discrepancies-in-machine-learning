@@ -79,6 +79,7 @@ def get_dataset(dataset='half-moons',
     else:
         scaler = None
 
+    feature_names = list(feature_names)
     X_train = pd.DataFrame(X_train, columns=feature_names)
     X_test = pd.DataFrame(X_test, columns=feature_names)
     y_train = pd.Series(y_train)

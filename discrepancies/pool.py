@@ -93,8 +93,8 @@ class BasicPool(Pool):
         """
         preds = self.predict(X)
         preds = preds.nunique(axis=1)
-        # Return 1 if the class predicted for one instance is not unique
-        return (preds>1).astype('int')
+        # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
+        return (preds>1)
 
 
     def predict_mode(self, X):
@@ -134,6 +134,16 @@ class AutogluonPool(Pool):
 
 
         return preds
+
+
+    def predict_discrepancies(self, X):
+        """
+        return 0 if no discrepancy between classifier for the prediction, return 1 if there are discrepancies
+        """
+        preds = self.predict(X)
+        preds = preds.nunique(axis=1)
+        # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
+        return (preds>1)
 
 
     def get_df_4_autogluon(self, X, y):
