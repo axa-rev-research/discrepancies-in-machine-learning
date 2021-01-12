@@ -108,7 +108,7 @@ class AutogluonPool(Pool):
         pass
 
 
-    def fit(self, X, y, time_limit=10):
+    def fit(self, X, y, time_limit=2):
 
         self.X_columns = X.columns.to_list()
         train_data = self.get_df_4_autogluon(X,y)
@@ -117,7 +117,7 @@ class AutogluonPool(Pool):
 
         return self
 
-    def predict(self, mode='individual', models_to_include=None):
+    def predict(self, X, mode='individual', models_to_include=None):
         
         if mode == 'individual':
 

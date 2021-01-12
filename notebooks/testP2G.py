@@ -1,5 +1,5 @@
 import warnings
-warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore')
 
 import numpy as np
 import pandas as pd
@@ -18,31 +18,81 @@ from discrepancies import datasets, pool, pool2graph, evaluation
 RANDOM_STATE = 42
 
 
-
-# Get data and fit a pool of classifiers on it
+print("##### HALF MOONS #####")
 
 X_train, X_test, y_train, y_test, scaler, feature_names, target_names = datasets.get_dataset(n_samples=1000, noise=0.3)
-#X_train, X_test, y_train, y_test, scaler, feature_names, target_names = datasets.get_dataset(dataset='breast-cancer', n_samples=1000, noise=0.3)
 
+print("--- Basic Pool ---")
 pool1 = pool.BasicPool()
 pool1 = pool1.fit(X_train, y_train)
 
+print("pool2graph.pool2graph(X_train, y_train, pool1, k=0, k_refinement_edges=0)")
+p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)
+p2g.fit(max_epochs=0, stopping_criterion=0.01)
 
+print("pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)")
+p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)
+p2g.fit(max_epochs=10, stopping_criterion=0.01)
 
-p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10)
-p2g.fit(max_epochs=2)
+print("pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=10)")
+p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=10)
+p2g.fit(max_epochs=10, stopping_criterion=0.01)
+"""
+print("--- Autogluon Pool ---")
 
-# Get discrepancies dataset (i.e. where the pool produce discrepancies according to the pool2graph)
-X_discr, y_discr = p2g.get_discrepancies_dataset()
+pool1 = pool.AutogluonPool()
+pool1 = pool1.fit(X_train, y_train)
 
-# Instantiate explainers - put them in a list
-xpl_tree = DecisionTreeClassifier(random_state=RANDOM_STATE, max_leaf_nodes=20)
-xpl_rfc = RandomForestClassifier()
+print("pool2graph.pool2graph(X_train, y_train, pool1, k=0, k_refinement_edges=0)")
+p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=0, k_refinement_edges=0)
+p2g.fit(max_epochs=0, stopping_criterion=0.01)
 
-xpls = [xpl_tree, xpl_rfc]
+print("pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)")
+p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)
+p2g.fit(max_epochs=10, stopping_criterion=0.01)
 
-# Compare estimators' goodness of fit
-fit_scores, xpl_estimators = evaluation.compare_fit_explainer(xpls, X_discr, y_discr)
+print("pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=10)")
+p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=10)
+p2g.fit(max_epochs=10, stopping_criterion=0.01)
+"""
+########
 
-# Compare estimators' fidelity to pool's discrepancies (drawing new samples)
-fidelity_scores = evaluation.compare_fidelity_explainer(xpl_estimators, p2g, X_train, n=5000)
+for d in ['breast-cancer', 'load-wine', '20-newsgroups', 'kddcup99']:
+
+    print("##### "+d+" #####")
+
+    X_train, X_test, y_train, y_test, scaler, feature_names, target_names = datasets.get_dataset(dataset=d, n_samples=1000, noise=0.3)
+
+    print("--- Basic Pool ---")
+    pool1 = pool.BasicPool()
+    pool1 = pool1.fit(X_train, y_train)
+
+    print("pool2graph.pool2graph(X_train, y_train, pool1, k=0, k_refinement_edges=0)")
+    p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=0, k_refinement_edges=0)
+    p2g.fit(max_epochs=0, stopping_criterion=0.01)
+
+    print("pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)")
+    p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)
+    p2g.fit(max_epochs=10, stopping_criterion=0.01)
+
+    print("pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=10)")
+    p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=10)
+    p2g.fit(max_epochs=10, stopping_criterion=0.01)
+    """
+    print("--- Autogluon Pool ---")
+
+    pool1 = pool.AutogluonPool()
+    pool1 = pool1.fit(X_train, y_train)
+
+    print("pool2graph.pool2graph(X_train, y_train, pool1, k=0, k_refinement_edges=0)")
+    p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=0, k_refinement_edges=0)
+    p2g.fit(max_epochs=0, stopping_criterion=0.01)
+
+    print("pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)")
+    p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)
+    p2g.fit(max_epochs=10, stopping_criterion=0.01)
+
+    print("pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=10)")
+    p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=10)
+    p2g.fit(max_epochs=10, stopping_criterion=0.01)
+    """
