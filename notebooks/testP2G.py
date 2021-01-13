@@ -1,98 +1,102 @@
-import warnings
-warnings.filterwarnings('ignore')
-
 import numpy as np
 import pandas as pd
 
-import matplotlib.pyplot as plt
-
-import networkx as nx
+import time
+from multiprocessing import Pool
 
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 
-import sys; sys.path.insert(0, '/Users/a435vv/OneDrive - AXA/Projects/BlackboxesDiscrepancies/discrepancies-in-machine-learning/') # add parent folder path where discrepancies folder is
+_PATH = '/Users/a435vv/OneDrive - AXA/Projects/BlackboxesDiscrepancies/discrepancies-in-machine-learning/'
+import sys; sys.path.insert(0, _PATH) # add parent folder path where discrepancies folder is
 
 from discrepancies import datasets, pool, pool2graph, evaluation
 
 RANDOM_STATE = 42
 
-
-print("##### HALF MOONS #####")
-
-X_train, X_test, y_train, y_test, scaler, feature_names, target_names = datasets.get_dataset(n_samples=1000, noise=0.3)
-
-print("--- Basic Pool ---")
-pool1 = pool.BasicPool()
-pool1 = pool1.fit(X_train, y_train)
-
-print("pool2graph.pool2graph(X_train, y_train, pool1, k=0, k_refinement_edges=0)")
-p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)
-p2g.fit(max_epochs=0, stopping_criterion=0.01)
-
-print("pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)")
-p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)
-p2g.fit(max_epochs=10, stopping_criterion=0.01)
-
-print("pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=10)")
-p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=10)
-p2g.fit(max_epochs=10, stopping_criterion=0.01)
 """
-print("--- Autogluon Pool ---")
-
-pool1 = pool.AutogluonPool()
-pool1 = pool1.fit(X_train, y_train)
-
-print("pool2graph.pool2graph(X_train, y_train, pool1, k=0, k_refinement_edges=0)")
-p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=0, k_refinement_edges=0)
-p2g.fit(max_epochs=0, stopping_criterion=0.01)
-
-print("pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)")
-p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)
-p2g.fit(max_epochs=10, stopping_criterion=0.01)
-
-print("pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=10)")
-p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=10)
-p2g.fit(max_epochs=10, stopping_criterion=0.01)
+PARAMETERS OF THE EXPERIMENT
 """
-########
 
-for d in ['breast-cancer', 'load-wine', '20-newsgroups', 'kddcup99']:
+N_JOBS = 4
 
-    print("##### "+d+" #####")
+# _POOL = ['Basic', 'AutoGluon']
+_POOL = ['AutoGluon']
 
-    X_train, X_test, y_train, y_test, scaler, feature_names, target_names = datasets.get_dataset(dataset=d, n_samples=1000, noise=0.3)
+# _DATASETS = ['half-moons', 'breast-cancer', 'load-wine', '20-newsgroups', 'kddcup99']
+_DATASETS = ['half-moons']
 
-    print("--- Basic Pool ---")
-    pool1 = pool.BasicPool()
-    pool1 = pool1.fit(X_train, y_train)
+_K_INIT = [1,3,5,10]
+_K_REFINEMENT = [0,1,3,5,10]
+_MAX_EPOCHS = [0,1,2,3,4,5]
+stopping_criterion = 0.01
 
-    print("pool2graph.pool2graph(X_train, y_train, pool1, k=0, k_refinement_edges=0)")
-    p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=0, k_refinement_edges=0)
-    p2g.fit(max_epochs=0, stopping_criterion=0.01)
+_P2G_SETUPS = {}
 
-    print("pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)")
-    p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)
-    p2g.fit(max_epochs=10, stopping_criterion=0.01)
+for p in _POOL:
+    for d in _DATASETS:
+        for k_init in _K_INIT:
+            for k_refinement in _K_REFINEMENT:
+                for max_epochs in _MAX_EPOCHS:
 
-    print("pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=10)")
-    p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=10)
-    p2g.fit(max_epochs=10, stopping_criterion=0.01)
-    """
-    print("--- Autogluon Pool ---")
+                    # run_name = 'p'+str(p)+'_d'+str(d)+'_ki'+str(k_init)+'_kr'+str(k_refinement)+'_e'+str(max_epochs)+'_s'+str(stopping_criterion)+'_r'+str(time.time())
+                    run_name = 'p'+str(p)+'_d'+str(d)+'_ki'+str(k_init)+'_kr'+str(k_refinement)+'_e'+str(max_epochs)+'_s'+str(stopping_criterion)
+                    _P2G_SETUPS[run_name] = {'pool':p,
+                                            'dataset':d,
+                                            'k_init':k_init,
+                                            'k_refinement':k_refinement,
+                                            'max_epochs':max_epochs,
+                                            'stopping_criterion':stopping_criterion}
 
-    pool1 = pool.AutogluonPool()
-    pool1 = pool1.fit(X_train, y_train)
 
-    print("pool2graph.pool2graph(X_train, y_train, pool1, k=0, k_refinement_edges=0)")
-    p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=0, k_refinement_edges=0)
-    p2g.fit(max_epochs=0, stopping_criterion=0.01)
+"""
+DEFINE ONE RUN
+"""
 
-    print("pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)")
-    p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=0)
-    p2g.fit(max_epochs=10, stopping_criterion=0.01)
+def run(cfg_i):
 
-    print("pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=10)")
-    p2g = pool2graph.pool2graph(X_train, y_train, pool1, k=10, k_refinement_edges=10)
-    p2g.fit(max_epochs=10, stopping_criterion=0.01)
-    """
+    print('#### Start Run #'+str(cfg_i))
+
+    cfg = _P2G_SETUPS[list(_P2G_SETUPS.keys())[cfg_i]]
+    run_name = list(_P2G_SETUPS.keys())[cfg_i]
+
+    print(cfg)
+
+    X_train, X_test, y_train, y_test, scaler, feature_names, target_names = datasets.get_dataset(dataset=cfg['dataset'], n_samples=1000, noise=0.3)
+
+    pool_name = cfg['pool']
+
+    if pool_name == 'Basic':
+        pool_run = pool.BasicPool()
+    elif pool_name == 'AutoGluon':
+        pool_run = pool.AutogluonPool()
+    else:
+        raise ValueError
+
+    pool_run = pool_run.fit(X_train, y_train)
+
+    p2g = pool2graph.pool2graph(X_train, y_train, pool_run, k_init=cfg['k_init'], k_refinement=cfg['k_refinement'])
+    p2g.fit(max_epochs=cfg['max_epochs'], stopping_criterion=cfg['stopping_criterion'])
+
+    # cfg['fidelity'] = 
+
+    s = pd.Series(cfg)
+    s.to_csv(_PATH+'notebooks/results/'+str(run_name)+'.csv')
+
+    print('---- End Run #'+str(cfg_i))
+
+    return cfg
+
+
+"""
+RUN EXPE
+"""
+
+runs = range(len(list(_P2G_SETUPS.keys())))
+runs = list(runs[:4])
+
+if __name__ == "__main__":
+    with Pool(N_JOBS) as p:
+        p.map(run, runs)
+    # for r in runs[1:2]:
+    #     run(r)

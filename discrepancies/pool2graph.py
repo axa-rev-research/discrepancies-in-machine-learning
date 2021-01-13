@@ -20,17 +20,20 @@ from tqdm import tqdm
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
+# TODO: make sure the k=0 case is managed properly
+# TODO: 20 newsgroup is crashing
+# TODO: deal with categorical variables
 
 class pool2graph:
 
-    def __init__(self, Xtrain, Ytrain, pool, k=10, k_refinement_edges=0):
+    def __init__(self, Xtrain, Ytrain, pool, k_init=10, k_refinement=0):
 
         self.Xtrain = Xtrain
         self.Ytrain = Ytrain
         self.pool = pool
 
-        self.k = k
-        self.k_refinement_edges = k_refinement_edges
+        self.k_init = k_init
+        self.k_refinement = k_refinement
 
         self.G = nx.Graph()
         self.n_epoch = 0
@@ -110,7 +113,7 @@ class pool2graph:
             sum_distances = self.get_sum_distances()
 
             # If not the first iteration (previous_sum_distances != None) and if the sum_distances decreases at least at the following pace: (previous_sum_distances - sum_distances) / previous_sum_distances)< stopping_criterion, where stopping_criterion is expressed in %
-            # TODO: not a good stoppping criterion. When self.k_refinement_edges>0, we add many edges at each iteration => the overall distance increases
+            # TODO: not a good stoppping criterion. When self.k_refinement>0, we add many edges at each iteration => the overall distance increases
             if (previous_sum_distances != None) and (np.abs(previous_sum_distances - sum_distances) / previous_sum_distances) < stopping_criterion:
                 break
             else:
@@ -137,7 +140,7 @@ class pool2graph:
             If None (default), the method returns the edges for all the nodes with their k nearest nodes. If lnodes is a list of nodes (by their index), the edges for the lnodes with their k nearest nodes is returned
 
         k : None or int
-            Number of nearest neighbors to search. If None (default), use self.k or can be manually defined (int).
+            Number of nearest neighbors to search. If None (default), use self.k_init or can be manually defined (int).
 
         Returns
         -------
@@ -151,9 +154,9 @@ class pool2graph:
         nodes_features = pd.concat(nodes_features, axis=1).T
 
         if k is None:
-            k = self.k
+            k = self.k_init
 
-        # n_neighbors=self.k+1 because "the query set matches the training set, the nearest neighbor of each point is the point itself, at a distance of zero." (sklearn documentation)
+        # n_neighbors=self.k_init+1 because "the query set matches the training set, the nearest neighbor of each point is the point itself, at a distance of zero." (sklearn documentation)
         _NN = NearestNeighbors(n_neighbors=k+1, algorithm='auto')
         _NN = _NN.fit(nodes_features)
 
@@ -254,13 +257,12 @@ class pool2graph:
 
         # If the option to add edges with the k nearest nodes of the new nodes
         k_edges = []
-        if self.k_refinement_edges>0:
+        if self.k_refinement>0:
             # Get index (in the graph) of the new nodes
             new_nodes_index = [n[0] for n in new_nodes]
-            # Compute the self.k_refinement_edges nearest nodes of the new nodes
-            k_edges = self.get_edges_kneighbors(lnodes=new_nodes_index, k=self.k_refinement_edges)
+            # Compute the self.k_refinement nearest nodes of the new nodes
+            k_edges = self.get_edges_kneighbors(lnodes=new_nodes_index, k=self.k_refinement)
 
-        #new_edges = np.array(new_edges1+new_edges2+k_edges)
         new_edges = new_edges1+new_edges2+k_edges
 
         # Remove duplicate edges (if tuple-edge in both directions)
