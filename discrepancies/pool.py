@@ -113,12 +113,15 @@ class AutogluonPool(Pool):
         self.X_columns = X.columns.to_list()
         train_data = self.get_df_4_autogluon(X,y)
 
-        self.predictor = task.fit(train_data=train_data, time_limits=time_limit, label='class', refit_full=True)
+        self.predictor = task.fit(train_data=train_data, time_limits=time_limit, label='class', refit_full=True, verbosity=0)
 
         return self
 
     def predict(self, X, mode='individual', models_to_include=None):
         
+        if not (isinstance(X,pd.DataFrame) or isinstance(X,task.Dataset)):
+            X = pd.DataFrame(X, columns=self.X_columns)
+
         if mode == 'individual':
 
             preds = {}
@@ -140,6 +143,7 @@ class AutogluonPool(Pool):
         """
         return 0 if no discrepancy between classifier for the prediction, return 1 if there are discrepancies
         """
+
         preds = self.predict(X)
         preds = preds.nunique(axis=1)
         # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
