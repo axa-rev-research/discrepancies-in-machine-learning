@@ -26,11 +26,22 @@ logging.getLogger().setLevel(logging.INFO)
 
 class pool2graph:
 
-    def __init__(self, Xtrain, Ytrain, pool, k_init=10, k_refinement=0):
+    def __init__(self, Xtrain, Ytrain, pool, k_init=10, k_refinement=0, X_feature_discrete=None):
 
         self.Xtrain = Xtrain
         self.Ytrain = Ytrain
         self.pool = pool
+
+        # if no precisions on discrete features, it is assumed all features are  continuous
+        # TODO: distinction continuous/discrete not use for now. For the refinement algo the idea would be to create 2 nodes, with the corresponding edges, with each of them having the discrete values of one of the two original nodes (the numeric values being shared as usual, as the middle of the two original nodes). It remains the question of the calculation of the distance (heap queue, k nearest nodes)
+        if X_feature_discrete is None:
+            self.X_feature_discrete = [False for _ in range(self.Xtrain.shape[1])]
+            
+        else:
+            if len(X_feature_discrete)==self.Xtrain.shape[1] and sum([t in [True, False] for t in np.unique([True, False, False, True])])==self.Xtrain.shape[1]:
+                self.X_feature_discrete = X_feature_discrete
+            else:
+                raise ValueError
 
         self.k_init = k_init
         self.k_refinement = k_refinement
