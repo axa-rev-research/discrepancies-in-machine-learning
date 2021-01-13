@@ -19,12 +19,13 @@ PARAMETERS OF THE EXPERIMENT
 """
 
 N_JOBS = 4
+_OUTPUT_DIRECTORY = '~/Downloads/tmp/'
 
 # _POOL = ['Basic', 'AutoGluon']
 _POOL = ['AutoGluon']
 
-# _DATASETS = ['half-moons', 'breast-cancer', 'load-wine', '20-newsgroups', 'kddcup99']
-_DATASETS = ['half-moons']
+_DATASETS = ['half-moons', 'breast-cancer', 'load-wine', 'kddcup99']
+#_DATASETS = ['half-moons']
 
 _K_INIT = [1,3,5,10]
 _K_REFINEMENT = [0,1,3,5,10]
@@ -68,12 +69,13 @@ def run(cfg_i):
 
     if pool_name == 'Basic':
         pool_run = pool.BasicPool()
+        pool_run = pool_run.fit(X_train, y_train)
+
     elif pool_name == 'AutoGluon':
         pool_run = pool.AutogluonPool()
+        pool_run = pool_run.fit(X_train, y_train, output_directory=_OUTPUT_DIRECTORY+'Autogluon/')
     else:
         raise ValueError
-
-    pool_run = pool_run.fit(X_train, y_train)
 
     p2g = pool2graph.pool2graph(X_train, y_train, pool_run, k_init=cfg['k_init'], k_refinement=cfg['k_refinement'])
     p2g.fit(max_epochs=cfg['max_epochs'], stopping_criterion=cfg['stopping_criterion'])
@@ -81,7 +83,7 @@ def run(cfg_i):
     # cfg['fidelity'] = 
 
     s = pd.Series(cfg)
-    s.to_csv(_PATH+'notebooks/results/'+str(run_name)+'.csv')
+    s.to_csv(_OUTPUT_DIRECTORY+'results/'+str(run_name)+'.csv')
 
     print('---- End Run #'+str(cfg_i))
 

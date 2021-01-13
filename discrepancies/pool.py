@@ -108,12 +108,12 @@ class AutogluonPool(Pool):
         pass
 
 
-    def fit(self, X, y, time_limit=2):
+    def fit(self, X, y, output_directory, time_limit=2):
 
         self.X_columns = X.columns.to_list()
         train_data = self.get_df_4_autogluon(X,y)
 
-        self.predictor = task.fit(train_data=train_data, time_limits=time_limit, label='class', refit_full=True, verbosity=0)
+        self.predictor = task.fit(train_data=train_data, time_limits=time_limit, label='class', refit_full=True, verbosity=0, output_directory=output_directory)
 
         return self
 

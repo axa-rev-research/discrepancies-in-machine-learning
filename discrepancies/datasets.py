@@ -52,13 +52,6 @@ def get_dataset(dataset='half-moons',
         feature_names = [str(i) for i in range(X.shape[1])]
         target_names = [str(i) for i in np.unique(y)]
 
-    elif dataset == '20-newsgroups':
-        data = fetch_20newsgroups_vectorized(subset='all', return_X_y=False)
-        X = data.data
-        y = data.target
-        feature_names = data.feature_names
-        target_names = data.target_names
-
     elif dataset == 'kddcup99':
         data = fetch_kddcup99(subset=None, return_X_y=False)
         X = data.data
