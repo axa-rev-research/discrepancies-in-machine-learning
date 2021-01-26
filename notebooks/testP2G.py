@@ -6,6 +6,9 @@ from multiprocessing import Pool
 
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
+import xgboost as xgb
+
+from sklearn.model_selection import StratifiedKFold
 
 import sys, os
 # add folder path where discrepancies folder is
@@ -25,14 +28,15 @@ N_JOBS = 15
 _OUTPUT_DIRECTORY = '/home/ec2-user/SageMaker/results'
 
 _N_REPLICATION = 3
+_N_SAMPLING = 5000
 
-#_POOL = ['Basic']
-_POOL = ['AutoGluon']
+_POOL = ['Basic']
+#_POOL = ['AutoGluon']
 #_POOL = ['Basic', 'AutoGluon']
 
 # _DATASETS = ['half-moons', 'breast-cancer', 'load-wine', 'kddcup99']
-#_DATASETS = ['half-moons']
-_DATASETS = ['half-moons', 'breast-cancer', 'load-wine']
+_DATASETS = ['half-moons']
+#_DATASETS = ['half-moons', 'breast-cancer', 'load-wine']
 
 _K_INIT = [1,3,5,10]
 _K_REFINEMENT = [0,1,3,5,10]
@@ -61,6 +65,48 @@ def create_expe(_POOL, _DATASETS, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_REPLIC
                                                 'stopping_criterion':stopping_criterion}
                         
     return _P2G_SETUPS
+
+
+def test_fidelity(pool_run, run_name, n=5000):
+
+    X_discr, y_discr = pool_run.get_discrepancies_dataset()
+
+    kf = StratifiedKFold(n_splits=2, shuffle=True, random_state=RANDOM_STATE)
+
+    cv_iter = 0
+    for train_index, test_index in kf.split(X_discr, y_discr):
+
+        X_train = X_discr.iloc[train_index]
+        y_train = y_discr.iloc[train_index]
+        X_test = X_discr.iloc[test_index]
+        y_test = y_discr.iloc[test_index]
+
+        X_samples, kde_score = evaluation.random_sampling_kde(X_train, n=n)
+        X_samples = pd.DataFrame(X_samples, columns=X_train.columns)
+        y_pool_discr = pool_run.pool.predict_discrepancies(X_samples)
+
+        models = {}
+        models['XGB'] = xgb.XGBClassifier(n_jobs=1).fit(X_train, y_train)
+        models['tree'] = DecisionTreeClassifier(random_state=RANDOM_STATE, max_leaf_nodes=10).fit(X_train, y_train)
+        models['RFC'] = RandomForestClassifier().fit(X_train, y_train)
+        
+        preds_test = {}
+        preds_test['y_test'] = y_test
+
+        preds_sampling = {}
+        preds_sampling['y_pool_discr'] = y_pool_discr
+
+        for k in models.keys():
+            preds_test[k] = models[k].predict(X_test)
+            preds_sampling[k] = models[k].predict(X_samples)
+
+        df1 = pd.DataFrame(preds_test)
+        df1.to_csv(_OUTPUT_DIRECTORY+'/'+str(run_name)+'_PREDS_test_CV_'+str(cv_iter)+'.csv')
+
+        df2 = pd.DataFrame(preds_sampling)
+        df2.to_csv(_OUTPUT_DIRECTORY+'/'+str(run_name)+'_PREDS_sampling_CV_'+str(cv_iter)+'.csv')
+
+        cv_iter += 1
 
 
 """
@@ -92,10 +138,13 @@ def run(cfg_i):
     p2g = pool2graph.pool2graph(X_train, y_train, pool_run, k_init=cfg['k_init'], k_refinement=cfg['k_refinement'])
     p2g.fit(max_epochs=cfg['max_epochs'], stopping_criterion=cfg['stopping_criterion'])
 
+    s = pd.Series(cfg)
+    s.to_csv(_OUTPUT_DIRECTORY+'/'+str(run_name)+'_CONFIG.csv')
+
     # cfg['fidelity'] = 
 
-    s = pd.Series(cfg)
-    s.to_csv(_OUTPUT_DIRECTORY+'/'+str(run_name)+'.csv')
+    test_fidelity(pool_run, run_name, n=_N_SAMPLING)
+
 
     print('---- End Run #'+str(cfg_i))
 

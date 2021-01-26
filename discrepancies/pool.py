@@ -94,7 +94,7 @@ class BasicPool(Pool):
         preds = self.predict(X)
         preds = preds.nunique(axis=1)
         # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
-        return (preds>1)
+        return (preds>1).astype(int)
 
 
     def predict_mode(self, X):
@@ -147,7 +147,7 @@ class AutogluonPool(Pool):
         preds = self.predict(X)
         preds = preds.nunique(axis=1)
         # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
-        return (preds>1)
+        return (preds>1).astype(int)
 
 
     def get_df_4_autogluon(self, X, y):
