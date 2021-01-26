@@ -21,11 +21,14 @@ RANDOM_STATE = 42
 PARAMETERS OF THE EXPERIMENT
 """
 
-N_JOBS = 4
-_OUTPUT_DIRECTORY = '~/Downloads/tmp/'
+N_JOBS = 15
+_OUTPUT_DIRECTORY = '/home/ec2-user/SageMaker/results'
 
-_POOL = ['Basic', 'AutoGluon']
+_N_REPLICATION = 3
+
+#_POOL = ['Basic']
 #_POOL = ['AutoGluon']
+_POOL = ['Basic', 'AutoGluon']
 
 # _DATASETS = ['half-moons', 'breast-cancer', 'load-wine', 'kddcup99']
 #_DATASETS = ['half-moons']
@@ -36,22 +39,28 @@ _K_REFINEMENT = [0,1,3,5,10]
 _MAX_EPOCHS = [0,1,2,3,4,5]
 stopping_criterion = 0.01
 
-_P2G_SETUPS = {}
 
-for p in _POOL:
-    for d in _DATASETS:
-        for k_init in _K_INIT:
-            for k_refinement in _K_REFINEMENT:
-                for max_epochs in _MAX_EPOCHS:
+def create_expe(_POOL, _DATASETS, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_REPLICATION):
 
-                    # run_name = 'p'+str(p)+'_d'+str(d)+'_ki'+str(k_init)+'_kr'+str(k_refinement)+'_e'+str(max_epochs)+'_s'+str(stopping_criterion)+'_r'+str(time.time())
-                    run_name = 'p'+str(p)+'_d'+str(d)+'_ki'+str(k_init)+'_kr'+str(k_refinement)+'_e'+str(max_epochs)+'_s'+str(stopping_criterion)
-                    _P2G_SETUPS[run_name] = {'pool':p,
-                                            'dataset':d,
-                                            'k_init':k_init,
-                                            'k_refinement':k_refinement,
-                                            'max_epochs':max_epochs,
-                                            'stopping_criterion':stopping_criterion}
+    _P2G_SETUPS = {}
+    
+    for p in _POOL:
+        for d in _DATASETS:
+            for k_init in _K_INIT:
+                for k_refinement in _K_REFINEMENT:
+                    for max_epochs in _MAX_EPOCHS:
+                        for n_replication in range(_N_REPLICATION):
+
+                            # run_name = 'p'+str(p)+'_d'+str(d)+'_ki'+str(k_init)+'_kr'+str(k_refinement)+'_e'+str(max_epochs)+'_s'+str(stopping_criterion)+'_r'+str(time.time())
+                            run_name = 'p'+str(p)+'_d'+str(d)+'_ki'+str(k_init)+'_kr'+str(k_refinement)+'_e'+str(max_epochs)+'_s'+str(stopping_criterion)+'_r'+str(n_replication)
+                            _P2G_SETUPS[run_name] = {'pool':p,
+                                                'dataset':d,
+                                                'k_init':k_init,
+                                                'k_refinement':k_refinement,
+                                                'max_epochs':max_epochs,
+                                                'stopping_criterion':stopping_criterion}
+                        
+    return _P2G_SETUPS
 
 
 """
@@ -87,7 +96,7 @@ def run(cfg_i):
     # cfg['fidelity'] = 
 
     s = pd.Series(cfg)
-    s.to_csv(_OUTPUT_DIRECTORY+'results/'+str(run_name)+'.csv')
+    s.to_csv(_OUTPUT_DIRECTORY+'/'+str(run_name)+'.csv')
 
     print('---- End Run #'+str(cfg_i))
 
@@ -98,11 +107,22 @@ def run(cfg_i):
 RUN EXPE
 """
 
-runs = range(len(list(_P2G_SETUPS.keys())))
-#runs = list(runs[:4])
 
 if __name__ == "__main__":
-    with Pool(N_JOBS) as p:
-        p.map(run, runs)
-    # for r in runs[1:2]:
-    #     run(r)
+
+    _POOL_TMP = [p for p in _POOL if p != 'AutoGluon']
+    if len(_POOL_TMP)>0:
+        _P2G_SETUPS = create_expe(_POOL_TMP, _DATASETS, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_REPLICATION)
+        runs = range(len(list(_P2G_SETUPS.keys())))
+
+        with Pool(N_JOBS) as p:
+            p.map(run, runs)
+
+        
+    # For Autogluon models: autogluon is already doing parallelization => no Pool at the experiments level when autogluon models
+    if 'AutoGluon' in _POOL:
+        _POOL_TMP = ['AutoGluon']
+        _P2G_SETUPS = create_expe(_POOL_TMP, _DATASETS, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_REPLICATION)
+        runs = range(len(list(_P2G_SETUPS.keys())))
+    
+        cfg = run(cfg_i)
