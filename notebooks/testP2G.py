@@ -27,8 +27,8 @@ _OUTPUT_DIRECTORY = '/home/ec2-user/SageMaker/results'
 _N_REPLICATION = 3
 
 #_POOL = ['Basic']
-#_POOL = ['AutoGluon']
-_POOL = ['Basic', 'AutoGluon']
+_POOL = ['AutoGluon']
+#_POOL = ['Basic', 'AutoGluon']
 
 # _DATASETS = ['half-moons', 'breast-cancer', 'load-wine', 'kddcup99']
 #_DATASETS = ['half-moons']
@@ -125,4 +125,5 @@ if __name__ == "__main__":
         _P2G_SETUPS = create_expe(_POOL_TMP, _DATASETS, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_REPLICATION)
         runs = range(len(list(_P2G_SETUPS.keys())))
     
-        cfg = run(cfg_i)
+        for r in runs:
+            cfg = run(r)
