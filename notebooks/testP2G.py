@@ -37,6 +37,7 @@ _POOL = ['Basic']
 # _DATASETS = ['half-moons', 'breast-cancer', 'load-wine', 'kddcup99']
 _DATASETS = ['half-moons']
 #_DATASETS = ['half-moons', 'breast-cancer', 'load-wine']
+#_DATASETS = ['boston', 'credit-card', 'churn']
 
 _K_INIT = [1,3,5,10]
 _K_REFINEMENT = [0,1,3,5,10]
