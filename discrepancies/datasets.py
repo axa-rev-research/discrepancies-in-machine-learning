@@ -3,7 +3,7 @@ import pandas as pd
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.datasets import load_breast_cancer, load_wine, fetch_20newsgroups_vectorized, fetch_kddcup99, make_moons
+from sklearn.datasets import load_breast_cancer, load_wine, fetch_20newsgroups_vectorized, fetch_kddcup99, make_moons, fetch_openml
 
 
 RANDOM_STATE = 42
