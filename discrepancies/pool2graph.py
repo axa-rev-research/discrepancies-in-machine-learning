@@ -465,9 +465,9 @@ class pool2graph:
         return components
 
 
-    def get_discrepancies_clusters(self):
+    def get_discrepancies_components(self):
 
-        lnodes, lcluster = [], []
+        lnodes, lcomponents = [], []
 
         G_discrepancies_components = self.get_subgraphs_discrepancies(ordered=True)
 
@@ -475,11 +475,11 @@ class pool2graph:
 
             lnodes_i = [node[1]['Xtrain_index'] for node in G_discrepancies_components[i].nodes(data=True)]
             lnodes += lnodes_i
-            lcluster += [i+1]*len(lnodes_i)
+            lcomponents += [i+1]*len(lnodes_i)
 
-        lcluster = pd.Series(lcluster, index=lnodes, name='cluster')
+        lcomponents = pd.Series(lcomponents, index=lnodes, name='cluster')
 
-        return lcluster
+        return lcomponents
 
 
     def get_discrepancies_dataset(self, binarize=True):
@@ -544,6 +544,8 @@ class pool2graph:
         /!/ right now in 2d - add t-sne or something for for D ?
         """
 
+        ax = plt.subplot()
+
         cmap = plt.cm.get_cmap('plasma')
         norm_colors = matplotlib.colors.Normalize(vmin=0, vmax=len(self.pool.models))
 
@@ -579,6 +581,8 @@ class pool2graph:
         plt.xlim((left*1.1, right*1.1))
         bottom, top = plt.ylim()
         plt.ylim((bottom*1.1, top*1.1))
+
+        return ax
 
 
     def plot_subgraphs_discrepancies(self):
