@@ -56,7 +56,7 @@ def create_expe(_POOL, _DATASETS, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_REPLIC
                         for n_replication in range(_N_REPLICATION):
 
                             # run_name = 'p'+str(p)+'_d'+str(d)+'_ki'+str(k_init)+'_kr'+str(k_refinement)+'_e'+str(max_epochs)+'_s'+str(stopping_criterion)+'_r'+str(time.time())
-                            run_name = 'p'+str(p)+'_d'+str(d)+'_ki'+str(k_init)+'_kr'+str(k_refinement)+'_e'+str(max_epochs)+'_s'+str(stopping_criterion)+'_r'+str(n_replication)
+                            run_name = 'p$'+str(p)+'_d$'+str(d)+'_ki$'+str(k_init)+'_kr$'+str(k_refinement)+'_e$'+str(max_epochs)+'_s$'+str(stopping_criterion)+'_r$'+str(n_replication)
                             _P2G_SETUPS[run_name] = {'pool':p,
                                                 'dataset':d,
                                                 'k_init':k_init,
@@ -129,7 +129,6 @@ def run(cfg_i):
     if pool_name == 'Basic':
         pool_run = pool.BasicPool()
         pool_run = pool_run.fit(X_train, y_train)
-
     elif pool_name == 'AutoGluon':
         pool_run = pool.AutogluonPool()
         pool_run = pool_run.fit(X_train, y_train, output_directory=_OUTPUT_DIRECTORY+'Autogluon/')
