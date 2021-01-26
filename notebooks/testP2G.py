@@ -194,7 +194,7 @@ def run(cfg_i):
 
     # cfg['fidelity'] = 
 
-    n_X_discr = test_fidelity(p2g, run_name, X_train, cfg)
+    n_X_discr = test_fidelity(p2g, run_name, cfg)
 
     print('---- End Run #'+str(cfg_i))
 
