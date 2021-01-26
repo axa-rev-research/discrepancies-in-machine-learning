@@ -493,7 +493,7 @@ class pool2graph:
         # Get attributes for nodes WITH discrepancies
         lnodes = self.get_nodes(discrepancies=True)
         DISCR_features, DISCR_pool_predictions, DISCR_y_true, DISCR_ground_truth = self.get_nodes_attributes(lnodes)
-        DISCR_lclusters = self.get_discrepancies_clusters()
+        DISCR_lclusters = self.get_discrepancies_components()
 
         # Get attributes for nodes WITHOUT discrepancies
         lnodes = self.get_nodes(discrepancies=False)

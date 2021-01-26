@@ -36,7 +36,7 @@ def random_sampling_kde(X, n=1000, kernel='gaussian', bandwidth=0.2):
 
     score = kde.score_samples(X)
 
-    X_samples = kde.sample(10000)
+    X_samples = kde.sample(n)
 
     return X_samples, score
 
