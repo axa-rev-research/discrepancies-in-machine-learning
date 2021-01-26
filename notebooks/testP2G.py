@@ -7,8 +7,11 @@ from multiprocessing import Pool
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 
-_PATH = '/Users/a435vv/OneDrive - AXA/Projects/BlackboxesDiscrepancies/discrepancies-in-machine-learning/'
-import sys; sys.path.insert(0, _PATH) # add parent folder path where discrepancies folder is
+import sys, os
+# add folder path where discrepancies folder is
+#_PATH = '/Users/a435vv/OneDrive - AXA/Projects/BlackboxesDiscrepancies/discrepancies-in-machine-learning/'
+#sys.path.insert(0, _PATH) 
+sys.path.append(os.path.dirname(sys.path[0]))
 
 from discrepancies import datasets, pool, pool2graph, evaluation
 
@@ -21,11 +24,12 @@ PARAMETERS OF THE EXPERIMENT
 N_JOBS = 4
 _OUTPUT_DIRECTORY = '~/Downloads/tmp/'
 
-# _POOL = ['Basic', 'AutoGluon']
-_POOL = ['AutoGluon']
+_POOL = ['Basic', 'AutoGluon']
+#_POOL = ['AutoGluon']
 
-_DATASETS = ['half-moons', 'breast-cancer', 'load-wine', 'kddcup99']
+# _DATASETS = ['half-moons', 'breast-cancer', 'load-wine', 'kddcup99']
 #_DATASETS = ['half-moons']
+_DATASETS = ['half-moons', 'breast-cancer', 'load-wine']
 
 _K_INIT = [1,3,5,10]
 _K_REFINEMENT = [0,1,3,5,10]
@@ -95,7 +99,7 @@ RUN EXPE
 """
 
 runs = range(len(list(_P2G_SETUPS.keys())))
-runs = list(runs[:4])
+#runs = list(runs[:4])
 
 if __name__ == "__main__":
     with Pool(N_JOBS) as p:
