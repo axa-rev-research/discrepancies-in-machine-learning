@@ -44,69 +44,121 @@ _MAX_EPOCHS = [0,1,2,3,4,5]
 stopping_criterion = 0.01
 
 
-def create_expe(_POOL, _DATASETS, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_REPLICATION):
+#def create_expe(_POOL, _DATASETS, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_REPLICATION):
 
-    _P2G_SETUPS = {}
-    
-    for p in _POOL:
-        for d in _DATASETS:
-            for k_init in _K_INIT:
-                for k_refinement in _K_REFINEMENT:
-                    for max_epochs in _MAX_EPOCHS:
-                        for n_replication in range(_N_REPLICATION):
+_P2G_SETUPS = {}
 
-                            # run_name = 'p'+str(p)+'_d'+str(d)+'_ki'+str(k_init)+'_kr'+str(k_refinement)+'_e'+str(max_epochs)+'_s'+str(stopping_criterion)+'_r'+str(time.time())
-                            run_name = 'p$'+str(p)+'_d$'+str(d)+'_ki$'+str(k_init)+'_kr$'+str(k_refinement)+'_e$'+str(max_epochs)+'_s$'+str(stopping_criterion)+'_r$'+str(n_replication)
-                            _P2G_SETUPS[run_name] = {'pool':p,
-                                                'dataset':d,
-                                                'k_init':k_init,
-                                                'k_refinement':k_refinement,
-                                                'max_epochs':max_epochs,
-                                                'stopping_criterion':stopping_criterion}
-                        
-    return _P2G_SETUPS
+_X_train = {}
+_X_test = {}
+_y_train = {}
+_y_test = {}
+_scaler = {}
+_feature_names = {}
+_target_names = {}
 
+_pools = {}
 
-def test_fidelity(pool_run, run_name, n=5000):
+_X_sampling_fidelity_eval = {}
+_y_sampling_fidelity_eval = {}
 
-    X_discr, y_discr = pool_run.get_discrepancies_dataset()
+flag_first_iter = True
+for p in _POOL:
+    for d in _DATASETS:
 
-    kf = StratifiedKFold(n_splits=2, shuffle=True, random_state=RANDOM_STATE)
+        if flag_first_iter:
+            _X_train[d] = {}
+            _X_test[d] = {}
+            _y_train[d] = {}
+            _y_test[d] = {}
+            _scaler[d] = {}
+            _feature_names[d] = {}
+            _target_names[d] = {}
 
-    cv_iter = 0
-    for train_index, test_index in kf.split(X_discr, y_discr):
+            _pools[d] = {}
+            _X_sampling_fidelity_eval[d] = {}
+            _y_sampling_fidelity_eval[d] = {}
 
-        X_train = X_discr.iloc[train_index]
-        y_train = y_discr.iloc[train_index]
-        X_test = X_discr.iloc[test_index]
-        y_test = y_discr.iloc[test_index]
+            flag_first_iter = False
 
-        X_samples, kde_score = evaluation.random_sampling_kde(X_train, n=n)
+        X_train, X_test, y_train, y_test, scaler, feature_names, target_names = datasets.get_dataset(dataset=d, n_samples=1000, noise=0.3)
+        _X_train[d][p] = X_train
+        _X_test[d][p] = X_test
+        _y_train[d][p] = y_train
+        _y_test[d][p] = y_test
+        _scaler[d][p] = scaler
+        _feature_names[d][p] = feature_names
+        _target_names[d][p] = target_names
+
+        if p == 'Basic':
+            pool_run = pool.BasicPool()
+            pool_run = pool_run.fit(X_train, y_train)
+        elif p == 'AutoGluon':
+            pool_run = pool.AutogluonPool()
+            pool_run = pool_run.fit(X_train, y_train, output_directory=_OUTPUT_DIRECTORY+'Autogluon/')
+        else:
+            raise ValueError
+
+        _pools[d][p] = pool_run
+
+        X_samples, kde_score = evaluation.random_sampling_kde(X_train, n=_N_SAMPLING)
         X_samples = pd.DataFrame(X_samples, columns=X_train.columns)
-        y_pool_discr = pool_run.pool.predict_discrepancies(X_samples)
+        y_pool_discr = pool_run.predict_discrepancies(X_samples)
 
-        models = {}
-        models['XGB'] = xgb.XGBClassifier(n_jobs=1).fit(X_train, y_train)
-        models['tree'] = DecisionTreeClassifier(random_state=RANDOM_STATE, max_leaf_nodes=10).fit(X_train, y_train)
-        models['RFC'] = RandomForestClassifier().fit(X_train, y_train)
-        
-        preds_test = {}
-        preds_test['y_test'] = y_test
+        _X_sampling_fidelity_eval[d][p] = X_samples
+        _y_sampling_fidelity_eval[d][p] = y_pool_discr
 
-        preds_sampling = {}
-        preds_sampling['y_pool_discr'] = y_pool_discr
+        for k_init in _K_INIT:
+            for k_refinement in _K_REFINEMENT:
+                for max_epochs in _MAX_EPOCHS:
+                    for n_replication in range(_N_REPLICATION):
 
-        for k in models.keys():
-            preds_test[k] = models[k].predict(X_test)
-            preds_sampling[k] = models[k].predict(X_samples)
+                        # run_name = 'p'+str(p)+'_d'+str(d)+'_ki'+str(k_init)+'_kr'+str(k_refinement)+'_e'+str(max_epochs)+'_s'+str(stopping_criterion)+'_r'+str(time.time())
+                        run_name = 'p$'+str(p)+'_d$'+str(d)+'_ki$'+str(k_init)+'_kr$'+str(k_refinement)+'_e$'+str(max_epochs)+'_s$'+str(stopping_criterion)+'_r$'+str(n_replication)
+                        _P2G_SETUPS[run_name] = {'pool':p,
+                                            'dataset':d,
+                                            'k_init':k_init,
+                                            'k_refinement':k_refinement,
+                                            'max_epochs':max_epochs,
+                                            'stopping_criterion':stopping_criterion}
+                    
+#    return _P2G_SETUPS
 
-        df1 = pd.DataFrame(preds_test)
-        df1.to_csv(_OUTPUT_DIRECTORY+'/'+str(run_name)+'_PREDS_test_CV_'+str(cv_iter)+'.csv')
 
-        df2 = pd.DataFrame(preds_sampling)
-        df2.to_csv(_OUTPUT_DIRECTORY+'/'+str(run_name)+'_PREDS_sampling_CV_'+str(cv_iter)+'.csv')
+def test_fidelity(p2g, run_name, cfg):
 
-        cv_iter += 1
+    X_discr, y_discr = p2g.get_discrepancies_dataset()
+
+    models = {}
+    models['XGB'] = xgb.XGBClassifier(n_jobs=1).fit(X_discr, y_discr)
+    models['tree'] = DecisionTreeClassifier(random_state=RANDOM_STATE, max_leaf_nodes=10).fit(X_discr, y_discr)
+    models['RFC'] = RandomForestClassifier().fit(X_discr, y_discr)
+    
+    preds_test = {}
+    preds_test['y_test'] = y_discr
+
+    preds_sampling = {}
+    preds_sampling['y_pool_discr'] = _y_sampling_fidelity_eval[cfg['dataset']][cfg['pool']]
+
+    X_sampling = _X_sampling_fidelity_eval[cfg['dataset']][cfg['pool']]
+
+    for k in models.keys():
+        preds_test[k] = models[k].predict(X_discr)
+        preds_sampling[k] = models[k].predict(X_sampling)
+
+    # Test a dumb random sampling (following X_train distrib)
+    X_samples, kde_score = evaluation.random_sampling_kde(X_train, n=len(X_discr))
+    X_samples = pd.DataFrame(X_samples, columns=X_train.columns)
+    y_samples_pool_discr = pool_run.predict_discrepancies(X_samples)
+    XGB = xgb.XGBClassifier(n_jobs=1).fit(X_samples, y_samples_pool_discr)
+    preds_sampling['Random Sampling'] = XGB.predict(X_sampling)
+
+    df1 = pd.DataFrame(preds_test)
+    df1.to_csv(_OUTPUT_DIRECTORY+'/'+str(run_name)+'_PREDS_train.csv')
+
+    df2 = pd.DataFrame(preds_sampling)
+    df2.to_csv(_OUTPUT_DIRECTORY+'/'+str(run_name)+'_PREDS_sampling.csv')
+
+    return len(X_discr)
 
 
 """
@@ -122,18 +174,16 @@ def run(cfg_i):
 
     print(cfg)
 
-    X_train, X_test, y_train, y_test, scaler, feature_names, target_names = datasets.get_dataset(dataset=cfg['dataset'], n_samples=1000, noise=0.3)
-
+    dataset = cfg['dataset']
     pool_name = cfg['pool']
 
-    if pool_name == 'Basic':
-        pool_run = pool.BasicPool()
-        pool_run = pool_run.fit(X_train, y_train)
-    elif pool_name == 'AutoGluon':
-        pool_run = pool.AutogluonPool()
-        pool_run = pool_run.fit(X_train, y_train, output_directory=_OUTPUT_DIRECTORY+'Autogluon/')
-    else:
-        raise ValueError
+    X_train =_X_train[dataset][pool_name]
+    X_test = _X_test[dataset][pool_name]
+    y_train = _y_train[dataset][pool_name]
+    y_test = _y_test[dataset][pool_name]
+    scaler = _scaler[dataset][pool_name]
+    feature_names = _feature_names[dataset][pool_name]
+    target_names = _target_names[dataset][pool_name]
 
     p2g = pool2graph.pool2graph(X_train, y_train, pool_run, k_init=cfg['k_init'], k_refinement=cfg['k_refinement'])
     p2g.fit(max_epochs=cfg['max_epochs'], stopping_criterion=cfg['stopping_criterion'])
@@ -143,8 +193,7 @@ def run(cfg_i):
 
     # cfg['fidelity'] = 
 
-    test_fidelity(pool_run, run_name, n=_N_SAMPLING)
-
+    n_X_discr = test_fidelity(p2g, run_name, X_train, cfg)
 
     print('---- End Run #'+str(cfg_i))
 
@@ -158,20 +207,10 @@ RUN EXPE
 
 if __name__ == "__main__":
 
-    _POOL_TMP = [p for p in _POOL if p != 'AutoGluon']
-    if len(_POOL_TMP)>0:
-        _P2G_SETUPS = create_expe(_POOL_TMP, _DATASETS, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_REPLICATION)
-        runs = range(len(list(_P2G_SETUPS.keys())))
 
-        with Pool(N_JOBS) as p:
-            p.map(run, runs)
+    runs = range(len(list(_P2G_SETUPS.keys())))
 
-        
-    # For Autogluon models: autogluon is already doing parallelization => no Pool at the experiments level when autogluon models
-    if 'AutoGluon' in _POOL:
-        _POOL_TMP = ['AutoGluon']
-        _P2G_SETUPS = create_expe(_POOL_TMP, _DATASETS, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_REPLICATION)
-        runs = range(len(list(_P2G_SETUPS.keys())))
+    with Pool(N_JOBS) as p:
+        p.map(run, runs)
+
     
-        for r in runs:
-            cfg = run(r)
