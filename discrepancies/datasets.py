@@ -3,7 +3,7 @@ import pandas as pd
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.datasets import load_breast_cancer, load_wine, fetch_20newsgroups_vectorized, fetch_kddcup99, make_moons
+from sklearn.datasets import load_breast_cancer, load_wine, fetch_20newsgroups_vectorized, fetch_kddcup99, make_moons, fetch_openml
 
 
 RANDOM_STATE = 42
@@ -58,6 +58,31 @@ def get_dataset(dataset='half-moons',
         y = data.target
         feature_names = data.feature_names
         target_names = data.target_names
+        
+    elif dataset == 'boston':
+        data = fetch_openml(data_id=853, return_X_y=False)
+        X = data.data
+        y = data.target
+        y = (y=='P').astype('int')
+        feature_names = data.feature_names
+        target_names = data.target_names
+    
+    elif dataset == 'credit-card': # Warning: 1) Huge dataset. 2) Etremely Imbalanced: Accuracy not appropriate, use Recall/F1
+        data = fetch_openml(data_id=1597, return_X_y=False)
+        X = data.data
+        y = data.target.astype('int')
+        feature_names = data.feature_names
+        target_names = data.target_names
+   
+    elif dataset == 'churn': # Warning: Imbalanced! Accuracy not appropriate, use Recall/F1
+        data = fetch_openml(data_id=40701, return_X_y=False)
+        df = pd.DataFrame(data.data, columns=data.feature_names)
+        del df['area_code'] #drop categorical attribute
+        X = df.values
+        feature_names = df.columns
+        y = data.target.astype('int')
+        target_names = data.target_names
+
 
     else:
         raise ValueError
