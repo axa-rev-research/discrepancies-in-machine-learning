@@ -15,8 +15,6 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
 
-from tqdm import tqdm
-
 logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
@@ -119,7 +117,7 @@ class pool2graph:
             self.new_nodes_index = 0
 
         previous_sum_distances = None
-        for n_epoch in tqdm(range(max_epochs)):
+        for n_epoch in range(max_epochs):
 
             sum_distances = self.get_sum_distances()
 
