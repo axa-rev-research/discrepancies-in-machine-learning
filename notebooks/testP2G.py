@@ -35,9 +35,9 @@ _OUTPUT_DIRECTORY = '/home/ec2-user/SageMaker/results'
 _N_REPLICATION = 3
 _N_SAMPLING = 5000
 
-_POOL = ['Basic']
+#_POOL = ['Basic']
 #_POOL = ['AutoGluon']
-#_POOL = ['Basic', 'AutoGluon']
+_POOL = ['Basic', 'AutoGluon']
 
 # _DATASETS = ['half-moons', 'breast-cancer', 'load-wine', 'kddcup99']
 #_DATASETS = ['half-moons']
@@ -141,13 +141,25 @@ def test_fidelity(p2g, run_name, cfg):
     """
     Assess the discovery of discrepancies
     """
+    
+    dataset = cfg['dataset']
+    pool_name = cfg['pool']
+    X_train =_X_train[dataset][pool_name]
+    X_test = _X_test[dataset][pool_name]
+    y_train = _y_train[dataset][pool_name]
+    y_test = _y_test[dataset][pool_name]
+    scaler = _scaler[dataset][pool_name]
+    feature_names = _feature_names[dataset][pool_name]
+    target_names = _target_names[dataset][pool_name]
+    pool_run = _pools[dataset][pool_name]
+    output_dir = cfg['outputdir']
 
     # Get the dataset of discrepancies from the pool2graph
     X_discr, y_discr = p2g.get_discrepancies_dataset()
 
     # Instantiate models that will be trained on the dataset of discrepancies
     models = {}
-    models['P2G-xgb'] = xgb.XGBClassifier(n_jobs=1).fit(X_discr, y_discr)
+    models['P2G-xgb'] = xgb.XGBClassifier(n_jobs=1, verbosity=0).fit(X_discr, y_discr)
     models['P2G-tree'] = DecisionTreeClassifier(random_state=RANDOM_STATE, max_leaf_nodes=10).fit(X_discr, y_discr)
     models['P2G-rfc'] = RandomForestClassifier(n_jobs=1).fit(X_discr, y_discr)
     
@@ -170,7 +182,7 @@ def test_fidelity(p2g, run_name, cfg):
     y_samples_pool_discr = p2g.pool.predict_discrepancies(X_samples)
     
     models = {}
-    models['RandomSampling-xgb'] = xgb.XGBClassifier(n_jobs=1).fit(X_samples, y_samples_pool_discr)
+    models['RandomSampling-xgb'] = xgb.XGBClassifier(n_jobs=1, verbosity=0).fit(X_samples, y_samples_pool_discr)
     models['RandomSampling-tree'] = DecisionTreeClassifier(random_state=RANDOM_STATE, max_leaf_nodes=10).fit(X_samples, y_samples_pool_discr)
     models['RandomSampling-rfc'] = RandomForestClassifier(n_jobs=1).fit(X_samples, y_samples_pool_discr)
     
@@ -186,16 +198,13 @@ def run(cfg_i):
     Define one experiment run
     """
 
-    print('#### Start Run #'+str(cfg_i)+'/'+str(len(list(_P2G_SETUPS.keys()))))
+    print('#### Start Run #'+str(cfg_i)+'/'+str(len(list(_P2G_SETUPS.keys()))+1))
 
     cfg = _P2G_SETUPS[list(_P2G_SETUPS.keys())[cfg_i]]
     run_name = list(_P2G_SETUPS.keys())[cfg_i]
 
-    print(cfg)
-
     dataset = cfg['dataset']
     pool_name = cfg['pool']
-
     X_train =_X_train[dataset][pool_name]
     X_test = _X_test[dataset][pool_name]
     y_train = _y_train[dataset][pool_name]
@@ -203,9 +212,7 @@ def run(cfg_i):
     scaler = _scaler[dataset][pool_name]
     feature_names = _feature_names[dataset][pool_name]
     target_names = _target_names[dataset][pool_name]
-    
     pool_run = _pools[dataset][pool_name]
-    
     output_dir = cfg['outputdir']
 
     p2g = pool2graph.pool2graph(X_train, y_train, pool_run, k_init=cfg['k_init'], k_refinement=cfg['k_refinement'])
@@ -216,7 +223,7 @@ def run(cfg_i):
 
     test_fidelity(p2g, run_name, cfg)
 
-    print('---- End Run #'+str(cfg_i)+'/'+str(len(list(_P2G_SETUPS.keys()))))
+    #print('---- End Run #'+str(cfg_i)+'/'+str(len(list(_P2G_SETUPS.keys()))+1))
 
     return cfg
 

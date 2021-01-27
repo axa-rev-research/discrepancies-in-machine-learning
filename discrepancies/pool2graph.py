@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings('ignore')
+
 from itertools import product, combinations, chain
 import toolz
 from heapq import heappush, heappop
@@ -16,7 +19,7 @@ import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
 
 logging.basicConfig()
-logging.getLogger().setLevel(logging.INFO)
+logging.getLogger().setLevel(logging.ERROR)
 
 # TODO: make sure the k=0 case is managed properly
 # TODO: 20 newsgroup is crashing
