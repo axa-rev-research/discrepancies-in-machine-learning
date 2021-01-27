@@ -461,7 +461,7 @@ class pool2graph:
         if ordered and len(components)>1:
             n_nodes_by_component = [len(component) for component in components]
             order = np.argsort(n_nodes_by_component)[::-1]
-            components = np.array(components)[order]
+            components = [components[i] for i in order]
 
         return components
 
