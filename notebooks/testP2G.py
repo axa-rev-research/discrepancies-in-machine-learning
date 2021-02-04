@@ -38,19 +38,12 @@ _N_REPLICATION = 5
 #TODO: we want a N much bigger than the number of sampled points by P2G: probably much more than 5000
 _N_SAMPLING = 20000
 
-#_POOL = ['Basic']
-#_POOL = ['AutoGluon']
-
 #TODO: add more simple datasets in the BASIC pool
 _POOL = ['Basic', 'AutoGluon']
 
-#_DATASETS = ['half-moons', 'breast-cancer', 'load-wine', 'kddcup99']
-#_DATASETS = ['half-moons']
-#_DATASETS = ['half-moons', 'breast-cancer', 'load-wine']
-#_DATASETS = ['half-moons', 'breast-cancer', 'load-wine', 'boston', 'credit-card', 'churn']
 _DATASETS = ['half-moons', 'breast-cancer', 'load-wine', 'boston', 'churn']
 
-_K_INIT = [1,2,3,4,5,6,7,8,9,10,15,20,30,40,50]
+_K_INIT = [0,1,2,3,4,5,6,7,8,9,10,15,20,30,40,50]
 
 #TODO: shall we remove?
 _K_REFINEMENT = [0,1,3,5,10]
@@ -118,7 +111,7 @@ for n_replication in range(_N_REPLICATION):
 
             _pools[d][p] = pool_run
 
-            if _X_sampling_fidelity_eval[d] != {}:
+            if len(_X_sampling_fidelity_eval[d])==0:
 
                 # TODO: n_replication pour le MC sampling aussi?
                 X_samples, kde_score = evaluation.random_sampling_kde(X_train, n=_N_SAMPLING)
@@ -251,5 +244,8 @@ if __name__ == "__main__":
 
     with Pool(N_JOBS) as p:
         p.map(run, runs)
+        
+    #for r in runs:
+    #    run(r)
 
     
