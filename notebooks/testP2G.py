@@ -31,23 +31,33 @@ RANDOM_STATE = 42
 
 N_JOBS = 15
 _OUTPUT_DIRECTORY = '/home/ec2-user/SageMaker/results'
+#_OUTPUT_DIRECTORY = '~/Downloads/tmp/results'
 
-_N_REPLICATION = 3
-_N_SAMPLING = 5000
+_N_REPLICATION = 5
+
+#TODO: we want a N much bigger than the number of sampled points by P2G: probably much more than 5000
+_N_SAMPLING = 20000
 
 #_POOL = ['Basic']
 #_POOL = ['AutoGluon']
+
+#TODO: add more simple datasets in the BASIC pool
 _POOL = ['Basic', 'AutoGluon']
 
-# _DATASETS = ['half-moons', 'breast-cancer', 'load-wine', 'kddcup99']
+#_DATASETS = ['half-moons', 'breast-cancer', 'load-wine', 'kddcup99']
 #_DATASETS = ['half-moons']
-_DATASETS = ['half-moons', 'breast-cancer', 'load-wine']
+#_DATASETS = ['half-moons', 'breast-cancer', 'load-wine']
 #_DATASETS = ['half-moons', 'breast-cancer', 'load-wine', 'boston', 'credit-card', 'churn']
-#_DATASETS = ['boston', 'credit-card', 'churn']
+_DATASETS = ['half-moons', 'breast-cancer', 'load-wine', 'boston', 'churn']
 
-_K_INIT = [1,3,5,10]
+_K_INIT = [1,2,3,4,5,6,7,8,9,10,15,20,30,40,50]
+
+#TODO: shall we remove?
 _K_REFINEMENT = [0,1,3,5,10]
+
 _MAX_EPOCHS = [0,1,2,3,4,5]
+
+#TODO: what to do with? to remove to make sure we have the impact of the EPOCH?
 stopping_criterion = 0.01
 
 
@@ -83,44 +93,49 @@ for d in _DATASETS:
     _y_sampling_fidelity_eval[d] = {}
 
 # Populate experiments plan
-for p in _POOL:
-    for d in _DATASETS:            
 
-        X_train, X_test, y_train, y_test, scaler, feature_names, target_names = datasets.get_dataset(dataset=d, n_samples=1000, noise=0.3)
-        _X_train[d][p] = X_train
-        _X_test[d][p] = X_test
-        _y_train[d][p] = y_train
-        _y_test[d][p] = y_test
-        _scaler[d][p] = scaler
-        _feature_names[d][p] = feature_names
-        _target_names[d][p] = target_names
+for n_replication in range(_N_REPLICATION):
+    for p in _POOL:
+        for d in _DATASETS:            
 
-        if p == 'Basic':
-            pool_run = pool.BasicPool()
-            pool_run = pool_run.fit(X_train, y_train)
-        elif p == 'AutoGluon':
-            pool_run = pool.AutogluonPool()
-            pool_run = pool_run.fit(X_train, y_train, output_directory=_OUTPUT_DIRECTORY+'Autogluon/')
-        else:
-            raise ValueError
+            X_train, X_test, y_train, y_test, scaler, feature_names, target_names = datasets.get_dataset(dataset=d, n_samples=1000, noise=0.3)
+            _X_train[d][p] = X_train
+            _X_test[d][p] = X_test
+            _y_train[d][p] = y_train
+            _y_test[d][p] = y_test
+            _scaler[d][p] = scaler
+            _feature_names[d][p] = feature_names
+            _target_names[d][p] = target_names
 
-        _pools[d][p] = pool_run
+            if p == 'Basic':
+                pool_run = pool.BasicPool()
+                pool_run = pool_run.fit(X_train, y_train)
+            elif p == 'AutoGluon':
+                pool_run = pool.AutogluonPool()
+                pool_run = pool_run.fit(X_train, y_train, output_directory=None)
+            else:
+                raise ValueError
 
-        X_samples, kde_score = evaluation.random_sampling_kde(X_train, n=_N_SAMPLING)
-        X_samples = pd.DataFrame(X_samples, columns=X_train.columns)
-        y_pool_discr = pool_run.predict_discrepancies(X_samples)
+            _pools[d][p] = pool_run
 
-        _X_sampling_fidelity_eval[d][p] = X_samples
-        _y_sampling_fidelity_eval[d][p] = y_pool_discr
+            if _X_sampling_fidelity_eval[d] != {}:
 
-        for k_init in _K_INIT:
-            for k_refinement in _K_REFINEMENT:
-                for max_epochs in _MAX_EPOCHS:
-                    for n_replication in range(_N_REPLICATION):
+                # TODO: n_replication pour le MC sampling aussi?
+                X_samples, kde_score = evaluation.random_sampling_kde(X_train, n=_N_SAMPLING)
+                X_samples = pd.DataFrame(X_samples, columns=X_train.columns)
+                y_pool_discr = pool_run.predict_discrepancies(X_samples)
 
+                _X_sampling_fidelity_eval[d] = X_samples
+                _y_sampling_fidelity_eval[d] = y_pool_discr
+
+            for k_init in _K_INIT:
+                for k_refinement in _K_REFINEMENT:
+                    for max_epochs in _MAX_EPOCHS:
+                        
                         run_name = 'p$'+str(p)+'_d$'+str(d)+'_ki$'+str(k_init)+'_kr$'+str(k_refinement)+'_e$'+str(max_epochs)+'_s$'+str(stopping_criterion)+'_r$'+str(n_replication)
                         
                         output_dir = Path(_OUTPUT_DIRECTORY+'/'+str(run_name))
+                        print(output_dir)
                         output_dir.mkdir(parents=True, exist_ok=True)
                         
                         _P2G_SETUPS[run_name] = {'pool':p,
@@ -168,10 +183,10 @@ def test_fidelity(p2g, run_name, cfg):
     
     # Prepare dict that will receive results
     preds_sampling = {}
-    preds_sampling['y_pool_discr'] = _y_sampling_fidelity_eval[cfg['dataset']][cfg['pool']]
+    preds_sampling['y_pool_discr'] = _y_sampling_fidelity_eval[cfg['dataset']]
 
     # For sampled points, blackboxes trained on the discrepancies' dataset predict if they are in discrepancies areas or not
-    X_sampling = _X_sampling_fidelity_eval[cfg['dataset']][cfg['pool']]
+    X_sampling = _X_sampling_fidelity_eval[cfg['dataset']]
     for k in models.keys():
         preds_sampling[k] = models[k].predict(X_sampling)
 
@@ -219,7 +234,7 @@ def run(cfg_i):
     p2g.fit(max_epochs=cfg['max_epochs'], stopping_criterion=cfg['stopping_criterion'])
 
     s = pd.Series(cfg)
-    s.to_csv(output_dir / 'CONFIG.csv')
+    s.to_csv(_OUTPUT_DIRECTORY+'/'+str(run_name)+'/CONFIG.csv')
 
     test_fidelity(p2g, run_name, cfg)
 
