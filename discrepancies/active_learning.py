@@ -33,8 +33,8 @@ class ActiveLearningExperiment:
         self.out = []
         self.accuracy_before = []
         for i in range(it):
-            X_train, X_test, y_train, y_test, scaler, feature_names, target_names = datasets.get_dataset(n_samples=300,dataset=self.dataset, test_size=1 - self.train_split, random_state=i)
-            X_eval, X_pool, y_eval, y_pool = train_test_split(X_test, y_test, test_size=self.pool_split, random_state=i) #oui sale
+            X_train, X_test, y_train, y_test, scaler, feature_names, target_names = datasets.get_dataset(n_samples=300,dataset=self.dataset, test_size=1 - self.train_split)
+            X_eval, X_pool, y_eval, y_pool = train_test_split(X_test, y_test, test_size=self.pool_split) #oui sale
             print('Dataset sizes', X_train.shape, X_pool.shape, X_eval.shape)
             print('Class balance', y_train.mean())
             self.pool1 = pool.BasicPool().fit(X_train, y_train)
