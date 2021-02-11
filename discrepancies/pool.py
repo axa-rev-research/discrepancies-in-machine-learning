@@ -2,7 +2,9 @@
 import pandas as pd
 import numpy as np
 
-from autogluon import TabularPrediction as task
+from autosklearn.classification import AutoSklearnClassifier
+
+#from autogluon import TabularPrediction as task
 
 import sklearn.datasets
 import sklearn.svm
@@ -23,8 +25,26 @@ class Pool:
     def predict_proba(self):
         pass
 
-    def predict_discrepancy(self):
+    def predict_discrepancies(self):
         pass
+
+    def agreement(self, x):
+        pred_agreement = {}
+
+        i = 1
+        for m in self.models:
+            pred_agreement[m] = self.models[m].predict(X)
+            i += 1
+
+        pred_agreement = pd.DataFrame(pred_agreement)
+        agreement = np.zeros((pred_agreement.shape[1],pred_agreement.shape[1]))
+
+        for i in range(pred_agreement.shape[1]):
+            for j in range(i+1,pred_agreement.shape[1]):
+                tmp = pred_agreement.iloc[:,i]==pred_agreement.iloc[:,j]
+                agreement[i,j] = tmp.sum()/tmp.shape[0]
+
+        return agreement
 
 
 class BasicPool(Pool):
@@ -61,6 +81,79 @@ class BasicPool(Pool):
             clf = sklearn.ensemble.RandomForestClassifier()
             clf.fit(X,y)
             self.models['RF'] = clf
+
+        return self
+
+    def predict(self, X):
+
+        preds = {}
+        for p in self.models:
+            preds[p] = self.models[p].predict(X)
+        preds = pd.DataFrame(preds)
+
+        return preds
+
+    def predict_proba(self, X, target=0):
+
+        preds = {}
+        for p in self.models:
+            try:
+                preds[p] = self.models[p].predict_proba(X)[:,target]
+            except:
+                a = np.empty((len(X),))
+                a[:] = np.nan
+                preds[p] = a
+        preds = pd.DataFrame(preds)
+
+        return preds
+
+    def predict_discrepancies(self, X):
+        """
+        return 0 if no discrepancy between classifier for the prediction, return 1 if there are discrepancies
+        """
+        preds = self.predict(X)
+        preds = preds.nunique(axis=1)
+        # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
+        return (preds>1).astype(int)
+
+
+    def predict_mode(self, X):
+        preds = self.predict(X)
+        return preds.mode(axis=1)
+
+
+class AutoSklearnPool(Pool):
+
+    def __init__(self, max_delta_accuracies=0.05, time_left_for_this_task=30, n_jobs=2):
+        
+        self.max_delta_accuracies = max_delta_accuracies
+        self.automl = AutoSklearnClassifier(time_left_for_this_task=time_left_for_this_task, n_jobs=n_jobs)
+
+
+    def fit(self, X, y):
+        """
+        X: pd.DataFrame, training set's input
+        y: pd.DataFrame, training set's target
+        """
+
+        self.models = {}
+
+        # bad hack to catch the "AttributeError: 'AutoSklearnClassifier' object has no attribute 'load_models'" error
+        try:
+            self.automl.fit(X, y, dataset_name='digits')
+        except:
+            pass
+
+        lowerbound_accuracy = np.max(self.automl.cv_results_['mean_test_score'])*(1-self.max_delta_accuracies)
+        accuracies = self.automl.cv_results_['mean_test_score']
+        models_2_pool = accuracies>=lowerbound_accuracy
+
+        self.models = {}
+        j = 1
+        for i, (weight, pipeline) in enumerate(self.automl.get_models_with_weights()):
+            if models_2_pool[i]:
+                self.models['autosklearn#'+str(j)] = pipeline
+                j += 1
 
         return self
 

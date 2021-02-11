@@ -55,7 +55,7 @@ class pool2graph:
         self._cache = {}
 
 
-    def fit(self, max_epochs=0, stopping_criterion=0.01):
+    def fit(self, max_epochs=0, stopping_criterion=None):
         """Fit a graph that describes predictions' discrepancies across the input domain (Xtrain).
 
         The graph is initialized at no cost (almost, if predictions where recycled from the training/evaluation of the pool), where each node of the graph is a point of the training set Xtrain.
@@ -73,8 +73,8 @@ class pool2graph:
         max_epoch : int
             Number of iterations of graph's refinement (default=0)
 
-        stopping_criterion : float in [0,1]
-            Expressed as the minimal decrease in percentage of the sum of the lengths of edges with discrepancies between t-1 and t to continue the graph's refinement (i.e. proceed with iteration t+1).
+        stopping_criterion : float in [0,1] or None
+            Expressed as the minimal decrease in percentage of the sum of the lengths of edges with discrepancies between t-1 and t to continue the graph's refinement (i.e. proceed with iteration t+1). If None, not used.
 
         Returns
         -------
@@ -107,35 +107,38 @@ class pool2graph:
         _edges = self.get_edges_kneighbors()
         self.G.add_edges_from(_edges)
 
-        # Graph refinement
-        if self.n_epoch < max_epochs:
+        # If the graph has actually edges to refine
+        if len(_edges)>0:
 
-            # Initialize and populate heapqueue (to prioritize edges' refinement)
-            self.heapq = []
-            for e in self.G.edges(data=True):
-                if self._edge_selection(e):
-                    heappush(self.heapq, (-e[2]['distance'], (e[0],e[1])))
+            # Graph refinement
+            if self.n_epoch < max_epochs:
 
-            # Index for new nodes (index *stricly negative* to distinguish from actual points from X_train)
-            self.new_nodes_index = 0
+                # Initialize and populate heapqueue (to prioritize edges' refinement)
+                self.heapq = []
+                for e in self.G.edges(data=True):
+                    if self._edge_selection(e):
+                        heappush(self.heapq, (-e[2]['distance'], (e[0],e[1])))
 
-        previous_sum_distances = None
-        for n_epoch in range(max_epochs):
+                # Index for new nodes (index *stricly negative* to distinguish from actual points from X_train)
+                self.new_nodes_index = 0
 
-            sum_distances = self.get_sum_distances()
+            previous_sum_distances = None
+            for n_epoch in range(max_epochs):
 
-            # If not the first iteration (previous_sum_distances != None) and if the sum_distances decreases at least at the following pace: (previous_sum_distances - sum_distances) / previous_sum_distances)< stopping_criterion, where stopping_criterion is expressed in %
-            # TODO: not a good stoppping criterion. When self.k_refinement>0, we add many edges at each iteration => the overall distance increases
-            if (previous_sum_distances != None) and (np.abs(previous_sum_distances - sum_distances) / previous_sum_distances) < stopping_criterion:
-                break
-            else:
-                previous_sum_distances = sum_distances
+                sum_distances = self.get_sum_distances()
 
-            logging.info("### EPOCH #"+str(n_epoch)+" - Sum of distances ="+str(sum_distances)+"\n")
+                # If not the first iteration (previous_sum_distances != None) and if the sum_distances decreases at least at the following pace: (previous_sum_distances - sum_distances) / previous_sum_distances)< stopping_criterion, where stopping_criterion is expressed in %
+                # TODO: not a good stoppping criterion. When self.k_refinement>0, we add many edges at each iteration => the overall distance increases
+                if (stopping_criterion != None) and (previous_sum_distances != None) and (np.abs(previous_sum_distances - sum_distances) / previous_sum_distances) < stopping_criterion:
+                    break
+                else:
+                    previous_sum_distances = sum_distances
 
-            self.n_epoch = n_epoch
-            
-            self._refine_graph()
+                logging.info("### EPOCH #"+str(n_epoch)+" - Sum of distances ="+str(sum_distances)+"\n")
+
+                self.n_epoch = n_epoch
+                
+                self._refine_graph()
 
         # Indicates that precomputed information (e.g. subgraphs of discrepancies) needs to be updated because the graph has changed
         self._precomputed_data_deprecated = True

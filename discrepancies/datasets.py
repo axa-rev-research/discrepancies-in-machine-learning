@@ -63,14 +63,14 @@ def get_dataset(dataset='half-moons',
         data = fetch_openml(data_id=853, return_X_y=False)
         X = data.data
         y = data.target
-        y = (y=='P').astype('int')
+        y = (y=='P').astype('int').values
         feature_names = data.feature_names
         target_names = data.target_names
     
     elif dataset == 'credit-card': # Warning: 1) Huge dataset. 2) Etremely Imbalanced: Accuracy not appropriate, use Recall/F1
         data = fetch_openml(data_id=1597, return_X_y=False)
         X = data.data
-        y = data.target.astype('int')
+        y = data.target.astype('int').values
         feature_names = data.feature_names
         target_names = data.target_names
    
@@ -80,7 +80,7 @@ def get_dataset(dataset='half-moons',
         del df['area_code'] #drop categorical attribute
         X = df.values
         feature_names = df.columns
-        y = data.target.astype('int')
+        y = data.target.astype('int').values
         target_names = data.target_names
 
 
@@ -98,10 +98,10 @@ def get_dataset(dataset='half-moons',
         scaler = None
 
     feature_names = list(feature_names)
-    X_train = pd.DataFrame(X_train, columns=feature_names)
-    X_test = pd.DataFrame(X_test, columns=feature_names)
     y_train = pd.Series(y_train)
     y_test = pd.Series(y_test)
+    X_train = pd.DataFrame(X_train, index=y_train.index, columns=feature_names)
+    X_test = pd.DataFrame(X_test, index=y_test.index, columns=feature_names)
 
     return X_train, X_test, y_train, y_test, scaler, feature_names, target_names
 
