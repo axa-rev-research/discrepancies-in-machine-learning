@@ -41,7 +41,7 @@ def mc_sampling(n_sampling, X_train):
     return X_samples
 
 
-def setup_experiment(_DATASETS, _POOL, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_SAMPLING, _MAX_DELTA_ACCURACIES, time_left_for_this_task=300, n_jobs=-1):
+def setup_experiment(_DATASETS, _POOL, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_SAMPLING, _MAX_DELTA_ACCURACIES, time_left_for_this_task=30, n_jobs=-1):
 
     _dataset, _pool, _k_init, _k_refinement, _max_epochs, _n_sampling, _run_suffix = [], [], [], [], [], [], []
 
@@ -69,7 +69,7 @@ def setup_experiment(_DATASETS, _POOL, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_S
                 pool_run = pool.AutogluonPool()
                 pool_run = pool_run.fit(DATASETS[d]['X_train'], DATASETS[d]['y_train'], output_directory=None)
             elif p == 'AutoSklearn':
-                pool_run = pool.AutoSklearnPool(max_delta_accuracies=_MAX_DELTA_ACCURACIES, time_left_for_this_task=30, n_jobs=n_jobs)
+                pool_run = pool.AutoSklearnPool(max_delta_accuracies=_MAX_DELTA_ACCURACIES, time_left_for_this_task=time_left_for_this_task, n_jobs=n_jobs)
                 pool_run = pool_run.fit(DATASETS[d]['X_train'], DATASETS[d]['y_train'])
             else:
                 raise ValueError
@@ -93,14 +93,14 @@ def setup_experiment(_DATASETS, _POOL, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_S
                         _run_suffix.append('D$'+str(d)+'_P$'+str(p)+'_KI$'+str(ki)+'_KR$'+str(kr)+'_ME$'+str(me))
 
                         
-    with open(OUTPUT_DIR+'DATASETS.pickle', 'wb') as f:
-        pickle.dump(DATASETS, f, pickle.HIGHEST_PROTOCOL)
+    # with open(OUTPUT_DIR+'DATASETS.pickle', 'wb') as f:
+    #     pickle.dump(DATASETS, f, pickle.HIGHEST_PROTOCOL)
     
-    with open(OUTPUT_DIR+'MC_SAMPLING.pickle', 'wb') as f:
-        pickle.dump(MC_SAMPLING, f, pickle.HIGHEST_PROTOCOL)
+    # with open(OUTPUT_DIR+'MC_SAMPLING.pickle', 'wb') as f:
+    #     pickle.dump(MC_SAMPLING, f, pickle.HIGHEST_PROTOCOL)
         
-    with open(OUTPUT_DIR+'POOLS.pickle', 'wb') as f:
-        pickle.dump(POOLS, f, pickle.HIGHEST_PROTOCOL)
+    # with open(OUTPUT_DIR+'POOLS.pickle', 'wb') as f:
+    #     pickle.dump(POOLS, f, pickle.HIGHEST_PROTOCOL)
                         
     df_expe_plan = {
         'dataset':_dataset,
@@ -179,69 +179,10 @@ def exec_run(run):
     p2g.fit(max_epochs=run.max_epochs)
     
 
-    with open(OUTPUT_DIR+'p2g$'+run.run_suffix+'.pickle', 'wb') as f:
-        pickle.dump(p2g, f, pickle.HIGHEST_PROTOCOL)
+    # with open(OUTPUT_DIR+'p2g$'+run.run_suffix+'.pickle', 'wb') as f:
+    #     pickle.dump(p2g, f, pickle.HIGHEST_PROTOCOL)
 
     test_fidelity(p2g, run)
-
-
-################### Analyze results ###################
-
-def get_all_expe():
-    
-    OUTPUT_DIR = pathlib.Path(str(pathlib.Path('../..').resolve())+'/results/')
-    
-    ldir = [n for n in os.listdir(OUTPUT_DIR) if '#' in n]
-    runs = list(set([n.split('_')[0] for n in ldir]))
-    return runs
-
-def get_replications(expe):
-    
-    OUTPUT_DIR = pathlib.Path(str(pathlib.Path('../..').resolve())+'/results/')
-    
-    runs = [n for n in os.listdir(OUTPUT_DIR) if expe in n]
-    return runs
-
-
-def get_expe_results(run):
-    
-    OUTPUT_DIR = pathlib.Path(str(pathlib.Path('../..').resolve())+'/results/')
-
-    repls = get_replications(run)
-    
-    res = {}
-    n_repl = 0
-    for repl in repls:
-    
-        path = str(OUTPUT_DIR)+'/'+repl
-        df_plan = pd.read_feather(path+'/'+'expe_plan.feather')
-
-        res_i = {}
-        for i,r in df_plan.iterrows():
-
-            preds = pd.read_feather(path+'/'+r.run_suffix+'_PREDS.feather')
-
-            competitors = [c for c in preds.columns if c!='y_pool_discr']
-            res_i[str(r.run_suffix)] = {c:f1_score(preds.loc[:,'y_pool_discr'], preds.loc[:,c], pos_label=1) for c in competitors}
-    
-        res_i = pd.DataFrame(res_i).T
-        df_plan = df_plan.set_index('run_suffix')
-        df = pd.concat((df_plan,res_i), axis=1)
-
-        df = df.melt(id_vars=['pool','dataset','k_init','k_refinement','max_epochs','n_sampling'], 
-            var_name="competitor", 
-            value_name="f1-score")
-        
-        df['n_replication'] = n_repl
-
-        res[n_repl] = df        
-        n_repl += 1
-        
-    res = pd.concat(res, axis=0).reset_index(drop=True)
-        
-    return res
-
-#########################################################
 
 
 if __name__ == "__main__":
@@ -268,7 +209,7 @@ if __name__ == "__main__":
             OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
             OUTPUT_DIR = str(OUTPUT_DIR)+'/'
 
-            df_expe_plan, DATASETS, MC_SAMPLING, POOLS = setup_experiment(DATASETS, POOL, K_INIT, K_REFINEMENT, MAX_EPOCHS, N_SAMPLING, MAX_DELTA_ACCURACIES, time_left_for_this_task=300, n_jobs=-1)
+            df_expe_plan, DATASETS, MC_SAMPLING, POOLS = setup_experiment(DATASETS, POOL, K_INIT, K_REFINEMENT, MAX_EPOCHS, N_SAMPLING, MAX_DELTA_ACCURACIES, time_left_for_this_task=30, n_jobs=-1)
             runs = df_expe_plan.iterrows()
 
             with Pool(N_JOBS) as p:

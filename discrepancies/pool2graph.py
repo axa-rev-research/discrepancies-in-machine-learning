@@ -178,7 +178,11 @@ class pool2graph:
         if lnodes is None:
             lnodes = nodes_features.index
 
-        _distances, _indices = _NN.kneighbors(nodes_features.loc[lnodes])
+        # If the number of nodes in the graph is lower to k_init: the number of nearest neighbours is set to number of nodes (size of X_train)
+        if len(nodes_features.loc[lnodes]) < k+1:
+            _distances, _indices = _NN.kneighbors(nodes_features.loc[lnodes], n_neighbors=len(nodes_features.loc[lnodes]))
+        else:
+            _distances, _indices = _NN.kneighbors(nodes_features.loc[lnodes])
         _indices = nodes_features.index[_indices]
 
         # Generate pairs of nodes to be connected by an edge
