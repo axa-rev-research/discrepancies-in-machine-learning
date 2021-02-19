@@ -146,7 +146,7 @@ class pool2graph:
         return self
 
 
-    def get_edges_kneighbors(self, lnodes=None, k=None):
+    def get_edges_kneighbors(self, lnodes=None, k=None, filter=None):
         """Returns the edges between each node and its k nearest nodes in the graph. If lnodes is None, all the edges between every node of the graph and their k nearest nodes are returned. If lnodes is a list of nodes (by their index), the method returns the edges between the lnodes only and their k nearest nodes.
 
         Parameters
@@ -171,31 +171,71 @@ class pool2graph:
         if k is None:
             k = self.k_init
 
-        # n_neighbors=self.k_init+1 because "the query set matches the training set, the nearest neighbor of each point is the point itself, at a distance of zero." (sklearn documentation)
-        _NN = NearestNeighbors(n_neighbors=k+1, algorithm='auto')
-        _NN = _NN.fit(nodes_features)
-
         if lnodes is None:
             lnodes = nodes_features.index
 
-        # If the number of nodes in the graph is lower to k_init: the number of nearest neighbours is set to number of nodes (size of X_train)
-        if len(nodes_features.loc[lnodes]) < k+1:
-            _distances, _indices = _NN.kneighbors(nodes_features.loc[lnodes], n_neighbors=len(nodes_features.loc[lnodes]))
-        else:
-            _distances, _indices = _NN.kneighbors(nodes_features.loc[lnodes])
+        tmp = {}
+        for i,n in self.G.nodes(data=True):
+            if i in lnodes:
+                tmp[i] = {'discrepancies':n['discrepancies'], 'pred':n['pool_predictions'].iloc[0]}
+        lnodes_DP = pd.DataFrame(tmp).T
+
+        # n_neighbors=self.k_init+1 because "the query set matches the training set, the nearest neighbor of each point is the point itself, at a distance of zero." (sklearn documentation)
+        # TODO: k_init -> between any nodes or between nodes with oppositie predicted labels / with discrepancies
+        _NN = NearestNeighbors(n_neighbors=k+1, algorithm='auto')
+        _NN = _NN.fit(nodes_features)
+
+
+        # (1) Process points with discrepancies: their nearest neighbors can be any points, no matter the discrepancies or the predicted labels
+        lnodes_index = lnodes_DP[lnodes_DP.discrepancies==1].index
+        _NN = NearestNeighbors(n_neighbors=k+1, algorithm='auto')
+        _NN = _NN.fit(nodes_features)
+        _distances, _indices = _NN.kneighbors(nodes_features.loc[lnodes_index], n_neighbors=np.min([k, len(nodes_features.loc[lnodes_index])]))
+
         _indices = nodes_features.index[_indices]
 
         # Generate pairs of nodes to be connected by an edge
         indices_distances = np.stack((_indices, _distances), axis=2)
         iterables = [product([nodes_features.index[i]], indices_distances[i][1:]) for i in range(len(indices_distances))]
         _edges = list(chain(*iterables))
-        
+
         # Reformat, with standard edge format: (node1,node2, {'distance':edge_length})
         _edges = [(_edges[i][0],_edges[i][1][0],{'distance':_edges[i][1][1]}) for i in range(len(_edges))]
 
+
+        # (2) Process points without discrepancies: their nearest neighbors can be points any points, EXCEPT points with the same predicted label
+        for p in lnodes_DP.pred.unique():
+            _NN = NearestNeighbors(n_neighbors=k+1, algorithm='auto')
+            _NN = _NN.fit(nodes_features[~(lnodes_DP.pred==0)])
+
+            lnodes_index = lnodes_DP[(lnodes_DP.discrepancies==0) & (lnodes_DP.pred==p)].index
+            _d, _i = _NN.kneighbors(nodes_features.loc[lnodes_index], n_neighbors=np.min([k, len(nodes_features.loc[lnodes_index])]))
+
+            _indices = nodes_features.index[_indices]
+
+            # _distances = np.concatenate((_distances, _d), axis=0)
+            # _indices = np.concatenate((_indices, _i), axis=0)
+
+            # Generate pairs of nodes to be connected by an edge
+            indices_distances = np.stack((_indices, _distances), axis=2)
+            iterables = [product([nodes_features.index[i]], indices_distances[i][1:]) for i in range(len(indices_distances))]
+            _e = list(chain(*iterables))
+
+            # Reformat, with standard edge format: (node1,node2, {'distance':edge_length})
+            _e = [(_e[i][0],_e[i][1][0],{'distance':_e[i][1][1]}) for i in range(len(_e))]
+            
+            # Append to existing list of edges
+            _edges = _edges + _e
+
+        # # Generate pairs of nodes to be connected by an edge
+        # indices_distances = np.stack((_indices, _distances), axis=2)
+        # iterables = [product([nodes_features.index[i]], indices_distances[i][1:]) for i in range(len(indices_distances))]
+        # _edges = list(chain(*iterables))
+
+        # # Reformat, with standard edge format: (node1,node2, {'distance':edge_length})
+        # _edges = [(_edges[i][0],_edges[i][1][0],{'distance':_edges[i][1][1]}) for i in range(len(_edges))]
+
         # Remove duplicate edges (if tuple-edge in both directions)
-        # _edges = list({tuple(row) for row in _edges})
-        # _edges = np.vstack(_edges)
         _edges = self.unique_edges(_edges)
 
         return _edges
@@ -595,7 +635,7 @@ class pool2graph:
 
     def plot_subgraphs_discrepancies(self):
 
-        G_discrepancies_components = self.get_subgraphs_discrepancies_in_predictions()
+        G_discrepancies_components = self.get_subgraphs_discrepancies()
 
         pos = {}
         for n in self.G.nodes(data=True):
