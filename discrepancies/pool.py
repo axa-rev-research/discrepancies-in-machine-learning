@@ -6,12 +6,14 @@ from autosklearn.classification import AutoSklearnClassifier
 
 #from autogluon import TabularPrediction as task
 
+from sklearn.base import BaseEstimator, ClassifierMixin
+
 import sklearn.datasets
 import sklearn.svm
 import sklearn.ensemble
 import sklearn.tree
 
-class Pool:
+class Pool(BaseEstimator, ClassifierMixin):
 
     def __init__(self):
         pass
@@ -128,7 +130,9 @@ class AutoSklearnPool(Pool):
         
         self.max_delta_accuracies = max_delta_accuracies
         self.automl = AutoSklearnClassifier(time_left_for_this_task=time_left_for_this_task, n_jobs=n_jobs)
-
+        self.n_jobs = n_jobs
+        self.time_left_for_this_task = time_left_for_this_task
+        self.max_delta_accuracies = max_delta_accuracies
 
     def fit(self, X, y):
         """
@@ -137,6 +141,8 @@ class AutoSklearnPool(Pool):
         """
 
         self.models = {}
+
+        self.classes_, y = np.unique(y, return_inverse=True)
 
         # bad hack to catch the "AttributeError: 'AutoSklearnClassifier' object has no attribute 'load_models'" error
         try:
@@ -157,12 +163,16 @@ class AutoSklearnPool(Pool):
 
         return self
 
-    def predict(self, X):
+    def predict(self, X, mode='discrepancies'):
 
-        preds = {}
-        for p in self.models:
-            preds[p] = self.models[p].predict(X)
-        preds = pd.DataFrame(preds)
+        if mode == 'discrepancies':
+            preds = self.predict_discrepancies(X)
+
+        elif mode == 'classification':
+            preds = {}
+            for p in self.models:
+                preds[p] = self.models[p].predict(X)
+            preds = pd.DataFrame(preds)
 
         return preds
 
@@ -184,7 +194,7 @@ class AutoSklearnPool(Pool):
         """
         return 0 if no discrepancy between classifier for the prediction, return 1 if there are discrepancies
         """
-        preds = self.predict(X)
+        preds = self.predict(X, mode='classification')
         preds = preds.nunique(axis=1)
         # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
         return (preds>1).astype(int)

@@ -85,7 +85,7 @@ class pool2graph:
         ## Pre-compute (1) euclidean distance between every point of the training set and (2) get for each point the predictions of each classifier of the pool
         
         #_euclidean_distances_X = euclidean_distances(self.Xtrain)
-        _preds = self.pool.predict(self.Xtrain)
+        _preds = self.pool.predict(self.Xtrain, mode='classification')
         _preds.index = self.Xtrain.index
         _discrepancies = self.pool.predict_discrepancies(self.Xtrain)
         _discrepancies.index = self.Xtrain.index
@@ -279,7 +279,7 @@ class pool2graph:
         u = np.array(u)
         v = np.array(v)
         w = np.array(w)
-        w_preds = self.pool.predict(w)
+        w_preds = self.pool.predict(w, mode='classification')
 
         w_discrepancies = self.pool.predict_discrepancies(w)
 
@@ -295,10 +295,11 @@ class pool2graph:
         new_nodes = []
         for i in range(len(w)):
             self.new_nodes_index += -1
-
+            features = w.iloc[i]
+            features.name = self.new_nodes_index
             new_node = (self.new_nodes_index,
             {'pool_predictions':w_preds.iloc[i],
-            'features':w.iloc[i],
+            'features':features,
             'discrepancies':w_discrepancies.iloc[i],
             'y_true':None,
             'ground_truth':False,
