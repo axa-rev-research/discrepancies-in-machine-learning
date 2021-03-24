@@ -2,9 +2,9 @@
 import pandas as pd
 import numpy as np
 
-from autosklearn.classification import AutoSklearnClassifier
+#from autosklearn.classification import AutoSklearnClassifier
 
-#from autogluon import TabularPrediction as task
+from autogluon import TabularPrediction as task
 
 from sklearn.base import BaseEstimator, ClassifierMixin
 
@@ -217,15 +217,18 @@ class AutogluonPool(Pool):
         train_data = self.get_df_4_autogluon(X,y)
 
         self.predictor = task.fit(train_data=train_data, time_limits=time_limit, label='class', verbosity=0, output_directory=output_directory)
+        
+        #hotfix to align with autosklearn's nomenclature
+        self.models = self.predictor.get_model_names()
 
         return self
 
-    def predict(self, X, mode='individual', models_to_include=None):
+    def predict(self, X, mode='classification', models_to_include=None):
         
         if not (isinstance(X,pd.DataFrame) or isinstance(X,task.Dataset)):
             X = pd.DataFrame(X, columns=self.X_columns)
 
-        if mode == 'individual':
+        if mode == 'classification':
 
             preds = {}
             for p in self.predictor.get_model_names():
