@@ -46,15 +46,17 @@ def get_expe_results(run):
     
         path = str(OUTPUT_DIR)+'/'+repl
         df_plan = pd.read_feather(path+'/'+'expe_plan.feather')
+        print(df_plan)
 
         res_i = {}
         for i,r in df_plan.iterrows():
 
             try:
                 preds = pd.read_feather(path+'/'+r.run_suffix+'_PREDS.feather')
-
-                competitors = [c for c in preds.columns if c!='y_pool_discr']
-                res_i[str(r.run_suffix)] = {c:f1_score(preds.loc[:,'y_pool_discr'], preds.loc[:,c], pos_label=1) for c in competitors}
+                
+                competitors = ['scores']
+                
+                res_i[str(r.run_suffix)] = {c: preds.values.mean() for c in competitors}
 
             except:
                 print("Couldn't open results for "+str(r.run_suffix))
@@ -65,7 +67,7 @@ def get_expe_results(run):
 
         df = df.melt(id_vars=['pool','dataset','k_init','k_refinement','max_epochs','n_sampling'], 
             var_name="competitor", 
-            value_name="f1-score")
+            value_name="average score")
         
         df['n_replication'] = n_repl
 
