@@ -27,25 +27,13 @@ logging.getLogger().setLevel(logging.ERROR)
 
 class pool2graph:
 
-    def __init__(self, Xtrain, Ytrain, pool, k_init=10, k_refinement=0, X_feature_discrete=None):
+    def __init__(self, Xtrain, Ytrain, pool, k_init=10):
 
         self.Xtrain = Xtrain
         self.Ytrain = Ytrain
         self.pool = pool
 
-        # if no precisions on discrete features, it is assumed all features are  continuous
-        # TODO: distinction continuous/discrete not use for now. For the refinement algo the idea would be to create 2 nodes, with the corresponding edges, with each of them having the discrete values of one of the two original nodes (the numeric values being shared as usual, as the middle of the two original nodes). It remains the question of the calculation of the distance (heap queue, k nearest nodes)
-        if X_feature_discrete is None:
-            self.X_feature_discrete = [False for _ in range(self.Xtrain.shape[1])]
-            
-        else:
-            if len(X_feature_discrete)==self.Xtrain.shape[1] and sum([t in [True, False] for t in np.unique([True, False, False, True])])==self.Xtrain.shape[1]:
-                self.X_feature_discrete = X_feature_discrete
-            else:
-                raise ValueError
-
         self.k_init = k_init
-        self.k_refinement = k_refinement
 
         self.G = nx.Graph()
         self.n_epoch = 0
@@ -55,7 +43,7 @@ class pool2graph:
         self._cache = {}
 
 
-    def fit(self, max_epochs=0, stopping_criterion=None):
+    def fit(self, max_epochs=0):
         """Fit a graph that describes predictions' discrepancies across the input domain (Xtrain).
 
         The graph is initialized at no cost (almost, if predictions where recycled from the training/evaluation of the pool), where each node of the graph is a point of the training set Xtrain.
@@ -63,7 +51,7 @@ class pool2graph:
         All the nodes are linked with their k nearest nodes. Edges whose nodes have predictions' discrepancies or different prediction's labels describe an area of predictions' discrepancies. These edges are called edges with discrepancies.
 
         The graph can be refined for a more precise description of the areas of predictions' discrepancies.
-        The refinement can be made during several iterations (controled by max_epochs) or until convergence (controled by stopping_criterion).
+        The refinement can be made during several iterations (controled by max_epochs).
         Each refinement's iteration aim at decreasing the length of edges with discrepancies, to have a more precise definition of the location of discrepancies areas. To do so, edges with discrepancies are split in half, a new node is inserted in the graph (at the position of the split) with its attributes (presence of prediction discrepancies). The former edge is removed from the graph and 2 new edges are added that link the 2 original nodes to the new node. At least one of the 2 new edges is an edge with discrepancies.
         
         After several iterations of graph refinement, edges with discrepancies have shorter lengths, leading to a more precise location of areas of discrepancies in the feature space of Xtrain.
@@ -73,28 +61,23 @@ class pool2graph:
         max_epoch : int
             Number of iterations of graph's refinement (default=0)
 
-        stopping_criterion : float in [0,1] or None
-            Expressed as the minimal decrease in percentage of the sum of the lengths of edges with discrepancies between t-1 and t to continue the graph's refinement (i.e. proceed with iteration t+1). If None, not used.
-
         Returns
         -------
         self : pool2graph
             Fitted pool2graph
         """
         
-        ## Pre-compute (1) euclidean distance between every point of the training set and (2) get for each point the predictions of each classifier of the pool
-        
-        #_euclidean_distances_X = euclidean_distances(self.Xtrain)
+        ## Pre-compute for each point the predictions of each classifier of the pool
         _preds = self.pool.predict(self.Xtrain, mode='classification')
         _preds.index = self.Xtrain.index
         _discrepancies = self.pool.predict_discrepancies(self.Xtrain)
         _discrepancies.index = self.Xtrain.index
 
         ## Create nodes from Xtrain and add them to the graph
-
         _nodes = [(i,
                 {"features":self.Xtrain.loc[i],
-                "pool_predictions":_preds.loc[i], "discrepancies":_discrepancies.loc[i],
+                "pool_predictions":_preds.loc[i],
+                "discrepancies":_discrepancies.loc[i],
                 "y_true":self.Ytrain.loc[i],
                 "ground_truth":True,
                 "Xtrain_index":i})
@@ -102,8 +85,7 @@ class pool2graph:
 
         self.G.add_nodes_from(_nodes)
 
-        ## Create edges and add them to the graph
-
+        ## For each points, get the k_init closest (with respect to the selection criteria) + create edges and add them to the graph
         _edges = self.get_edges_kneighbors()
         self.G.add_edges_from(_edges)
 
@@ -119,25 +101,18 @@ class pool2graph:
                     if self._edge_selection(e):
                         heappush(self.heapq, (-e[2]['distance'], (e[0],e[1])))
 
-                # Index for new nodes (index *stricly negative* to distinguish from actual points from X_train)
+                # Index for new nodes (index of new nodes *stricly negative* to distinguish them from nodes of ground_truth points from X_train)
                 self.new_nodes_index = 0
 
-            previous_sum_distances = None
-            for n_epoch in range(max_epochs):
+            for n_epoch in range(1,max_epochs+1):
 
-                sum_distances = self.get_sum_distances()
-
-                # If not the first iteration (previous_sum_distances != None) and if the sum_distances decreases at least at the following pace: (previous_sum_distances - sum_distances) / previous_sum_distances)< stopping_criterion, where stopping_criterion is expressed in %
-                # TODO: not a good stoppping criterion. When self.k_refinement>0, we add many edges at each iteration => the overall distance increases
-                if (stopping_criterion != None) and (previous_sum_distances != None) and (np.abs(previous_sum_distances - sum_distances) / previous_sum_distances) < stopping_criterion:
+                # If there is no edge to refine
+                if len(self.heapq)==0:
                     break
-                else:
-                    previous_sum_distances = sum_distances
 
-                logging.info("### EPOCH #"+str(n_epoch)+" - Sum of distances ="+str(sum_distances)+"\n")
+                logging.info(f'### EPOCH #{n_epoch}')
 
-                self.n_epoch = n_epoch
-                
+                self.n_epoch = n_epoch                
                 self._refine_graph()
 
         # Indicates that precomputed information (e.g. subgraphs of discrepancies) needs to be updated because the graph has changed
@@ -146,13 +121,11 @@ class pool2graph:
         return self
 
 
-    def get_edges_kneighbors(self, lnodes=None, k=None, filter=None):
+    def get_edges_kneighbors(self, k=None):
         """Returns the edges between each node and its k nearest nodes in the graph. If lnodes is None, all the edges between every node of the graph and their k nearest nodes are returned. If lnodes is a list of nodes (by their index), the method returns the edges between the lnodes only and their k nearest nodes.
 
         Parameters
         ----------
-        lnodes : None or list
-            If None (default), the method returns the edges for all the nodes with their k nearest nodes. If lnodes is a list of nodes (by their index), the edges for the lnodes with their k nearest nodes is returned
 
         k : None or int
             Number of nearest neighbors to search. If None (default), use self.k_init or can be manually defined (int).
@@ -165,75 +138,47 @@ class pool2graph:
 
         # Get features from all nodes of the graph
         nodes = self.G.nodes(data=True)
-        nodes_features = {n[0]:n[1]['features'] for n in nodes}
-        nodes_features = pd.concat(nodes_features, axis=1).T
+
+        nodes_features = {i:n['features'] for i,n in nodes}
+        nodes_features = pd.DataFrame(nodes_features).T
+        lnodes_DP = {i:{'discrepancies':n['discrepancies'], 'pred':n['pool_predictions'].iloc[0]} for i,n in nodes}
+        lnodes_DP = pd.DataFrame(lnodes_DP).T
 
         if k is None:
             k = self.k_init
 
-        if lnodes is None:
-            lnodes = nodes_features.index
-
-        tmp = {}
-        for i,n in self.G.nodes(data=True):
-            if i in lnodes:
-                tmp[i] = {'discrepancies':n['discrepancies'], 'pred':n['pool_predictions'].iloc[0]}
-        lnodes_DP = pd.DataFrame(tmp).T
-
-        # n_neighbors=self.k_init+1 because "the query set matches the training set, the nearest neighbor of each point is the point itself, at a distance of zero." (sklearn documentation)
-        # TODO: k_init -> between any nodes or between nodes with oppositie predicted labels / with discrepancies
-        _NN = NearestNeighbors(n_neighbors=k+1, algorithm='auto')
-        _NN = _NN.fit(nodes_features)
-
-
         # (1) Process points with discrepancies: their nearest neighbors can be any points, no matter the discrepancies or the predicted labels
-        lnodes_index = lnodes_DP[lnodes_DP.discrepancies==1].index
-        _NN = NearestNeighbors(n_neighbors=k+1, algorithm='auto')
+        _NN = NearestNeighbors(n_neighbors=np.min([k+1, len(nodes_features)]), algorithm='auto')
         _NN = _NN.fit(nodes_features)
-        _distances, _indices = _NN.kneighbors(nodes_features.loc[lnodes_index], n_neighbors=np.min([k, len(nodes_features.loc[lnodes_index])]))
+        
+        lnodes_index = lnodes_DP[lnodes_DP.discrepancies==1].index
+        _distances, _indices = _NN.kneighbors(nodes_features.loc[lnodes_index])
 
         _indices = nodes_features.index[_indices]
 
-        # Generate pairs of nodes to be connected by an edge
-        indices_distances = np.stack((_indices, _distances), axis=2)
-        iterables = [product([nodes_features.index[i]], indices_distances[i][1:]) for i in range(len(indices_distances))]
-        _edges = list(chain(*iterables))
-
-        # Reformat, with standard edge format: (node1,node2, {'distance':edge_length})
-        _edges = [(_edges[i][0],_edges[i][1][0],{'distance':_edges[i][1][1]}) for i in range(len(_edges))]
-
-
-        # (2) Process points without discrepancies: their nearest neighbors can be points any points, EXCEPT points with the same predicted label
-        for p in lnodes_DP.pred.unique():
-            _NN = NearestNeighbors(n_neighbors=k+1, algorithm='auto')
-            _NN = _NN.fit(nodes_features[~(lnodes_DP.pred==0)])
-
-            lnodes_index = lnodes_DP[(lnodes_DP.discrepancies==0) & (lnodes_DP.pred==p)].index
-            _d, _i = _NN.kneighbors(nodes_features.loc[lnodes_index], n_neighbors=np.min([k, len(nodes_features.loc[lnodes_index])]))
-
-            _indices = nodes_features.index[_indices]
-
-            # _distances = np.concatenate((_distances, _d), axis=0)
-            # _indices = np.concatenate((_indices, _i), axis=0)
-
-            # Generate pairs of nodes to be connected by an edge
-            indices_distances = np.stack((_indices, _distances), axis=2)
-            iterables = [product([nodes_features.index[i]], indices_distances[i][1:]) for i in range(len(indices_distances))]
-            _e = list(chain(*iterables))
-
-            # Reformat, with standard edge format: (node1,node2, {'distance':edge_length})
-            _e = [(_e[i][0],_e[i][1][0],{'distance':_e[i][1][1]}) for i in range(len(_e))]
-            
-            # Append to existing list of edges
+        #Generate pairs of nodes to be connected by an edge and format, with standard edge format: (node1,node2, {'distance':edge_length})
+        _edges = [] 
+        for i in range(len(_indices)):
+            _e = [(_indices[i][0], _indices[i][j], {'distance':_distances[i][j]}) for j in range(1,len(_indices[i]))]
             _edges = _edges + _e
 
-        # # Generate pairs of nodes to be connected by an edge
-        # indices_distances = np.stack((_indices, _distances), axis=2)
-        # iterables = [product([nodes_features.index[i]], indices_distances[i][1:]) for i in range(len(indices_distances))]
-        # _edges = list(chain(*iterables))
+        # (2) Process points without discrepancies: their nearest neighbors can be any points, EXCEPT points with the same predicted label
+        for p in lnodes_DP.pred.unique():
+            
+            X_nn = nodes_features[~(lnodes_DP.pred==p) | (lnodes_DP.discrepancies==1)]
 
-        # # Reformat, with standard edge format: (node1,node2, {'distance':edge_length})
-        # _edges = [(_edges[i][0],_edges[i][1][0],{'distance':_edges[i][1][1]}) for i in range(len(_edges))]
+            _NN = NearestNeighbors(n_neighbors=np.min([k, len(X_nn)]), algorithm='auto')
+            _NN = _NN.fit(X_nn)
+
+            lnodes_index = lnodes_DP[(lnodes_DP.pred==p) & (lnodes_DP.discrepancies==0)].index
+            _distances, _indices = _NN.kneighbors(nodes_features.loc[lnodes_index])
+            
+            _indices = nodes_features.index[_indices]
+            
+            #Generate pairs of nodes to be connected by an edge and format, with standard edge format: (node1,node2, {'distance':edge_length})
+            for i in range(len(_indices)):
+                _e = [(_indices[i][0], _indices[i][j], {'distance':_distances[i][j]}) for j in range(1,len(_indices[i]))]
+                _edges = _edges + _e
 
         # Remove duplicate edges (if tuple-edge in both directions)
         _edges = self.unique_edges(_edges)
@@ -246,8 +191,6 @@ class pool2graph:
         Subroutine for the graph refinement (fit of the graph).
         """
 
-        self.n_epoch += 1
-
         ## Step 1: get all the edges that can be refined without breaking the order of edge refinement (don't split an edge smaller than an edge resulting from the split of the biggest edge to split from the batch)
 
         to_refine = []
@@ -255,9 +198,9 @@ class pool2graph:
         # First iteration - to avoid the test at each loop
         e = heappop(self.heapq)
         to_refine.append(e)
-        threshold = e[0]/2
+        threshold = e[0]/2.
 
-        # Check which edges can be included in this batch of refinement to preserve the order of processing (longest edges first)
+        # Check which edges can be included in this batch of refinement to preserve the order of processing (longest edges first) - and homogenize the length of refined edges
         while self.heapq:
             e = heappop(self.heapq)
             if e[0]>threshold:
@@ -274,13 +217,13 @@ class pool2graph:
         for i in range(len(to_refine)):
             u.append(self.G.nodes[to_refine[i,1][0]]['features'])
             v.append(self.G.nodes[to_refine[i,1][1]]['features'])
-            w.append((u[-1]+v[-1])/2)
+            w.append((u[-1]+v[-1])/2.)
 
         u = np.array(u)
         v = np.array(v)
         w = np.array(w)
-        w_preds = self.pool.predict(w, mode='classification')
 
+        w_preds = self.pool.predict(w, mode='classification')
         w_discrepancies = self.pool.predict_discrepancies(w)
 
         d_uw = np.linalg.norm(u-w, axis=1)
@@ -288,15 +231,17 @@ class pool2graph:
 
         w = pd.DataFrame(np.array(w), columns=self.Xtrain.columns)
         
-        ## Step 3: add the new nodes and edges to the graph and the heapq
+        ## Step 3: remove the old nodes + add the new nodes and edges to the graph and the heapq
         
         self.G.remove_edges_from(to_refine[:,1])
 
         new_nodes = []
         for i in range(len(w)):
+
             self.new_nodes_index += -1
             features = w.iloc[i]
             features.name = self.new_nodes_index
+            
             new_node = (self.new_nodes_index,
             {'pool_predictions':w_preds.iloc[i],
             'features':features,
@@ -308,29 +253,20 @@ class pool2graph:
             new_nodes.append(new_node)
 
         new_nodes = np.array(new_nodes)
-
         self.G.add_nodes_from(new_nodes)
 
         # Format, with standard edge format: (node1,node2, {'distance':edge_length})
         new_edges1 = [(to_refine[i,1][0], new_nodes[i,0], {'distance':d_uw[i]}) for i in range(len(new_nodes))]
         new_edges2 = [(to_refine[i,1][1], new_nodes[i,0], {'distance':d_vw[i]}) for i in range(len(new_nodes))]
 
-        # If the option to add edges with the k nearest nodes of the new nodes
-        k_edges = []
-        if self.k_refinement>0:
-            # Get index (in the graph) of the new nodes
-            new_nodes_index = [n[0] for n in new_nodes]
-            # Compute the self.k_refinement nearest nodes of the new nodes
-            k_edges = self.get_edges_kneighbors(lnodes=new_nodes_index, k=self.k_refinement)
-
-        new_edges = new_edges1+new_edges2+k_edges
+        new_edges = new_edges1 + new_edges2
 
         # Remove duplicate edges (if tuple-edge in both directions)
         new_edges = self.unique_edges(new_edges)
 
         self.G.add_edges_from(new_edges)
 
-        # Add new edges to the heapqueue if they meet refinement's policy criterions
+        # Add new edges to the heapqueue if they meet refinement's policy criterion
         for i in range(len(new_edges)):
             u = new_edges[i][0]
             v = new_edges[i][1]
@@ -377,7 +313,7 @@ class pool2graph:
             The edge to evaluate according to refinement's policy
         policy : str, optional
             Name of the refinement's policy, options:
-            - 'discrepancy+differentPredictions': check (1) if vertices of the edge have different predicted labels OR (2) if one of the vertex has prediction discrepancies.
+            - 'discrepancy+differentPredictions': check (1) if vertices of the edge have different predicted labels OR (2) if AT MOST one of the vertex has prediction discrepancies.
 
         Returns
         -------
@@ -388,10 +324,11 @@ class pool2graph:
         selected = False
 
         if policy == 'discrepancy+differentPredictions':
-            # If vertices of the edge have different predicted labels (first prediction ['pool_predictions'].iloc[0] is only checked: because discrepancy in prediction is also catched) OR if one of the vertex has prediction discrepancies
-            selected = (self.G.nodes[e[0]]['pool_predictions'].iloc[0] != self.G.nodes[e[1]]['pool_predictions'].iloc[0]) or (self.G.nodes[e[0]]['discrepancies'] or self.G.nodes[e[1]]['discrepancies'])
+            # If vertices of the edge have different predicted labels (first prediction ['pool_predictions'].iloc[0] is only checked: because discrepancy in prediction is also catched) OR if AT MOST one of the vertex has prediction discrepancies
+            selected = ((self.G.nodes[e[0]]['pool_predictions'].iloc[0] != self.G.nodes[e[1]]['pool_predictions'].iloc[0]) or (self.G.nodes[e[0]]['discrepancies']==1 ^ self.G.nodes[e[1]]['discrepancies']==1))
 
         return selected
+
 
     #############################################
     ## Extract information from the graph
