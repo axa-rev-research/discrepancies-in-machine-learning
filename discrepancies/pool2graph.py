@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
 
 logging.basicConfig()
-logging.getLogger().setLevel(logging.ERROR)
+logging.getLogger().setLevel(logging.INFO)
 
 # TODO: make sure the k=0 case is managed properly
 # TODO: 20 newsgroup is crashing
@@ -325,7 +325,7 @@ class pool2graph:
 
         if policy == 'discrepancy+differentPredictions':
             # If vertices of the edge have different predicted labels (first prediction ['pool_predictions'].iloc[0] is only checked: because discrepancy in prediction is also catched) OR if AT MOST one of the vertex has prediction discrepancies
-            selected = ((self.G.nodes[e[0]]['pool_predictions'].iloc[0] != self.G.nodes[e[1]]['pool_predictions'].iloc[0]) or (self.G.nodes[e[0]]['discrepancies']==1 ^ self.G.nodes[e[1]]['discrepancies']==1))
+            selected = ((self.G.nodes[e[0]]['pool_predictions'].iloc[0] != self.G.nodes[e[1]]['pool_predictions'].iloc[0]) or (self.G.nodes[e[0]]['discrepancies']==1 or self.G.nodes[e[1]]['discrepancies']==1))
 
         return selected
 
