@@ -2,7 +2,7 @@
 import pandas as pd
 import numpy as np
 
-from autosklearn.classification import AutoSklearnClassifier
+#from autosklearn.classification import AutoSklearnClassifier
 
 #from autogluon import TabularPrediction as task
 
@@ -86,12 +86,16 @@ class BasicPool(Pool):
 
         return self
 
-    def predict(self, X):
+    def predict(self, X, mode='discrepancies'):
 
-        preds = {}
-        for p in self.models:
-            preds[p] = self.models[p].predict(X)
-        preds = pd.DataFrame(preds)
+        if mode == 'discrepancies':
+            preds = self.predict_discrepancies(X)
+
+        elif mode == 'classification':
+            preds = {}
+            for p in self.models:
+                preds[p] = self.models[p].predict(X)
+            preds = pd.DataFrame(preds)
 
         return preds
 
@@ -113,7 +117,7 @@ class BasicPool(Pool):
         """
         return 0 if no discrepancy between classifier for the prediction, return 1 if there are discrepancies
         """
-        preds = self.predict(X)
+        preds = self.predict(X, mode='classification')
         preds = preds.nunique(axis=1)
         # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
         return (preds>1).astype(int)
