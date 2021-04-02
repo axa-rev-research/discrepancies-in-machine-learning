@@ -9,7 +9,9 @@ import logging
 import numpy as np
 import pandas as pd
 
-from sklearn.neighbors import NearestNeighbors
+from sklearn.neighbors import NearestNeighbors, KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.manifold import TSNE
 
 import networkx as nx
@@ -150,10 +152,10 @@ class pool2graph:
         # (1) Process points with discrepancies: their nearest neighbors can be any points, no matter the discrepancies or the predicted labels
         _NN = NearestNeighbors(n_neighbors=np.min([k+1, len(nodes_features)]), algorithm='auto')
         _NN = _NN.fit(nodes_features)
-        
+
+
         lnodes_index = lnodes_DP[lnodes_DP.discrepancies==1].index
         _distances, _indices = _NN.kneighbors(nodes_features.loc[lnodes_index])
-
         _indices = nodes_features.index[_indices]
 
         #Generate pairs of nodes to be connected by an edge and format, with standard edge format: (node1,node2, {'distance':edge_length})
@@ -165,16 +167,14 @@ class pool2graph:
         # (2) Process points without discrepancies: their nearest neighbors can be any points, EXCEPT points with the same predicted label
         for p in lnodes_DP.pred.unique():
             
+            
             X_nn = nodes_features[~(lnodes_DP.pred==p) | (lnodes_DP.discrepancies==1)]
-
             _NN = NearestNeighbors(n_neighbors=np.min([k, len(X_nn)]), algorithm='auto')
             _NN = _NN.fit(X_nn)
-
             lnodes_index = lnodes_DP[(lnodes_DP.pred==p) & (lnodes_DP.discrepancies==0)].index
             _distances, _indices = _NN.kneighbors(nodes_features.loc[lnodes_index])
-            
             _indices = nodes_features.index[_indices]
-            
+
             #Generate pairs of nodes to be connected by an edge and format, with standard edge format: (node1,node2, {'distance':edge_length})
             for i in range(len(_indices)):
                 _e = [(_indices[i][0], _indices[i][j], {'distance':_distances[i][j]}) for j in range(1,len(_indices[i]))]
@@ -498,6 +498,37 @@ class pool2graph:
         return X_discr, y_discr
 
 
+   
+    def predict_discrepancies_from_graph(self, X, method='knn', k_neighbors=1):
+        """Predict discrepancies (yes / no) using closest nodes from the graph
+        
+        """
+        
+        lnodes = self.get_nodes()
+        features, pool_predictions, y_true, ground_truth = self.get_nodes_attributes(lnodes)
+        discrepancy_labels = self.pool.predict_discrepancies(features)
+
+        if method == 'knn':
+        
+            print('knn')
+            clf = KNeighborsClassifier(n_neighbors=k_neighbors, algorithm='auto')
+            
+        elif method == 'rf':
+            print('rf!')
+            clf = RandomForestClassifier(n_estimators=200)
+        elif method == 'tree':
+            print('tree')
+            clf = DecisionTreeClassifier(max_depth=None, class_weight='balanced')
+            
+        
+        clf = clf.fit(features, discrepancy_labels)
+        X_predictions = clf.predict(X)
+        
+        
+        return X_predictions
+    
+    
+    
     ################################################
     ## Display/Plot Information from the graph/pool
     ################################################

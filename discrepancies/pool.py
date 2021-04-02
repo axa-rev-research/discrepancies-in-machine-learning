@@ -211,20 +211,28 @@ class AutoSklearnPool(Pool):
 
 class AutogluonPool(Pool):
 
-    def __init__(self):
-        pass
+    def __init__(self, max_delta_accuracies=0.05):
+        self.max_delta_accuracies = max_delta_accuracies
 
 
-    def fit(self, X, y, output_directory, time_limit=2):
+    def fit(self, X, y, output_directory, time_limit=100):
 
         self.X_columns = X.columns.to_list()
         train_data = self.get_df_4_autogluon(X,y)
 
         self.predictor = task.fit(train_data=train_data, time_limits=time_limit, label='class', verbosity=0, output_directory=output_directory)
         
+        # introducing delta max accuracies for autogluon
+        test_data = self.get_df_4_autogluon(X, y)
+        leaderboard = self.predictor.leaderboard(test_data, silent=True)
+        lowerbound_accuracy = np.max(leaderboard['score_test'])*(1-self.max_delta_accuracies)
+        accuracies = leaderboard['score_test']
+        self.predictor.delete_models(models_to_keep=leaderboard[leaderboard.score_test >= lowerbound_accuracy]['model'].tolist(), dry_run=False)
+        
         #hotfix to align with autosklearn's nomenclature
         self.models = self.predictor.get_model_names()
-
+        print('apres suppression')
+        print(self.models)
         return self
 
     def predict(self, X, mode='classification', models_to_include=None):

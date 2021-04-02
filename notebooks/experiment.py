@@ -17,9 +17,6 @@ import xgboost as xgb
 from sklearn.model_selection import StratifiedKFold
 
 import sys, os
-# add folder path where discrepancies folder is
-#_PATH = '/Users/a435vv/OneDrive - AXA/Projects/BlackboxesDiscrepancies/discrepancies-in-machine-learning/'
-#sys.path.insert(0, _PATH) 
 sys.path.append(os.path.dirname(sys.path[0]))
 
 from discrepancies import datasets, pool, pool2graph, evaluation

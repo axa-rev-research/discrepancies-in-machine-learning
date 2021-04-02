@@ -12,15 +12,17 @@ from pathlib import Path
 import pathlib, pickle
 from functools import partial
 
+from sklearn.metrics import recall_score, f1_score
+
 import sys, os
 sys.path.append(os.path.dirname(sys.path[0]))
 
-from discrepancies import datasets, pool, pool2graph, clamp_evaluation, discrepancies_intervals
+from discrepancies import datasets, pool, pool2graph, elephant_evaluation, discrepancies_intervals
 
 import configparser
 
 config = configparser.ConfigParser()
-config.read('config_clamps.ini')
+config.read('config_elephant.ini')
 
 
 RANDOM_STATE = 42
@@ -31,9 +33,9 @@ def mc_sampling(n_sampling, dim):
     _alphas = np.tile(_alphas.reshape(n_sampling, -1), (1, dim))
     return _alphas
 
-def setup_experiment(_DATASETS, _POOL, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_SAMPLING, _MAX_DELTA_ACCURACIES, OUTPUT_DIR, time_left_for_this_task=30, n_jobs=-1):
+def setup_experiment(_DATASETS, _POOL, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_SAMPLING, _MAX_DELTA_ACCURACIES, _K_NEIGHBORS, OUTPUT_DIR, time_left_for_this_task=30, n_jobs=-1):
 
-    _dataset, _pool, _k_init, _k_refinement, _max_epochs, _n_sampling, _run_suffix = [], [], [], [], [], [], []
+    _dataset, _pool, _k_init, _k_refinement, _max_epochs, _k_neighbors, _n_sampling, _run_suffix = [], [], [], [], [], [], [], []
 
     DATASETS, MC_SAMPLING, POOLS = {}, {}, {}
 
@@ -45,7 +47,7 @@ def setup_experiment(_DATASETS, _POOL, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_S
                 
         # Draw MC eval samples
         MC_SAMPLING[d]={}
-        MC_SAMPLING[d]['samples'] = mc_sampling(_N_SAMPLING, DATASETS[d]['X_train'].shape[1])
+        #MC_SAMPLING[d]['samples'] = mc_sampling(_N_SAMPLING, DATASETS[d]['X_train'].shape[1])
 
         POOLS[d] = {}
         
@@ -71,15 +73,17 @@ def setup_experiment(_DATASETS, _POOL, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_S
             for ki in _K_INIT:
                 for kr in _K_REFINEMENT:
                     for me in _MAX_EPOCHS:
+                        for kn in _K_NEIGHBORS:
 
-                        _dataset.append(d)
-                        _pool.append(p)
-                        _k_init.append(ki)
-                        _k_refinement.append(kr)
-                        _max_epochs.append(me)
+                            _dataset.append(d)
+                            _pool.append(p)
+                            _k_init.append(ki)
+                            _k_refinement.append(kr)
+                            _max_epochs.append(me)
+                            _k_neighbors.append(kn)
 
-                        _n_sampling.append(_N_SAMPLING)
-                        _run_suffix.append('D$'+str(d)+'_P$'+str(p)+'_KI$'+str(ki)+'_KR$'+str(kr)+'_ME$'+str(me))
+                            _n_sampling.append(_N_SAMPLING)
+                            _run_suffix.append('D$'+str(d)+'_P$'+str(p)+'_KI$'+str(ki)+'_KR$'+str(kr)+'_ME$'+str(me)+'_KN$'+str(kn))
 
                         
     # with open(OUTPUT_DIR+'DATASETS.pickle', 'wb') as f:
@@ -97,6 +101,7 @@ def setup_experiment(_DATASETS, _POOL, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_S
         'k_init':_k_init,
         'k_refinement':_k_refinement,
         'max_epochs':_max_epochs,
+        'k_neighbors':_k_neighbors,
         'n_sampling':_n_sampling,
         'run_suffix':_run_suffix,
     }
@@ -107,22 +112,16 @@ def setup_experiment(_DATASETS, _POOL, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_S
     return df_expe_plan, DATASETS, MC_SAMPLING, POOLS
 
 
-def test_fidelity(p2g, run, pool, output_dir):
+def test_fidelity(p2g, run, X, pool, output_dir):
     """
     Assess the discovery of discrepancies
     """
     OUTPUT_DIR = output_dir
    
-    cf_intervals = discrepancies_intervals.get_discrepancies_intervals(p2g.G)
+    scores = elephant_evaluation.discrepancy_score(p2g, run, X, pool, method='knn')
     
-    _alphas = np.random.random(run.n_sampling)
-    _alphas = np.tile(_alphas.reshape(run.n_sampling, -1), (1, cf_intervals[0].border_features.shape[1]))
-    
-    scores = clamp_evaluation.evaluate_intervals(cf_intervals, pool, run.n_sampling, _alphas)
-       
-
-    df = pd.DataFrame(scores)
-    df.columns = ['scores']
+    df = pd.DataFrame([scores])
+    df.columns = ["f1_score"]
     df.to_feather(OUTPUT_DIR+'/'+str(run.run_suffix)+'_PREDS.feather')
 
     
@@ -147,7 +146,7 @@ def exec_run(run, datasets, pools, output_dir):
     # with open(OUTPUT_DIR+'p2g$'+run.run_suffix+'.pickle', 'wb') as f:
     #     pickle.dump(p2g, f, pickle.HIGHEST_PROTOCOL)
 
-    test_fidelity(p2g, run, POOLS[run.dataset][run.pool], output_dir)
+    test_fidelity(p2g, run, DATASETS[run.dataset]['X_test'], POOLS[run.dataset][run.pool], output_dir)
 
     
     
@@ -164,15 +163,18 @@ def main():
         K_REFINEMENT = [int(i) for i in config[expe]['K_REFINEMENT'].split(',')]
         MAX_EPOCHS = [int(i) for i in config[expe]['MAX_EPOCHS'].split(',')]
         MAX_DELTA_ACCURACIES = float(config[expe]['MAX_DELTA_ACCURACIES']) #?
+        
+        K_NEIGHBORS = [int(i) for i in config[expe]['K_NEIGHBORS'].split(',')]
 
         time_expe = int(time.time())
         for i in range(N_REPLICATION):
+            print('============== ITERATION %i'%i)
             
             OUTPUT_DIR = pathlib.Path(str(pathlib.Path('../..').resolve())+'/results/'+str(time_expe)+'#'+str(expe)+'_'+str(i))
             OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
             OUTPUT_DIR = str(OUTPUT_DIR)+'/'
 
-            df_expe_plan, DATASETS, MC_SAMPLING, POOLS = setup_experiment(DATASETS, POOL, K_INIT, K_REFINEMENT, MAX_EPOCHS, N_SAMPLING, MAX_DELTA_ACCURACIES, OUTPUT_DIR, time_left_for_this_task=30, n_jobs=-1)
+            df_expe_plan, DATASETS, MC_SAMPLING, POOLS = setup_experiment(DATASETS, POOL, K_INIT, K_REFINEMENT, MAX_EPOCHS, N_SAMPLING, MAX_DELTA_ACCURACIES, K_NEIGHBORS, OUTPUT_DIR, time_left_for_this_task=30, n_jobs=-1)
             runs = df_expe_plan.iterrows()
 
             with Pool(N_JOBS) as p:

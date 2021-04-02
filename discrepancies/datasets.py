@@ -9,7 +9,7 @@ from sklearn.datasets import load_breast_cancer, load_wine, fetch_20newsgroups_v
 RANDOM_STATE = 42
 
 def get_dataset(dataset='half-moons',
-                n_samples=100,
+                n_samples=1000,
                 test_size=0.33,
                 standardize=True,
                 noise=0.3):
@@ -63,14 +63,14 @@ def get_dataset(dataset='half-moons',
         data = fetch_openml(data_id=853, return_X_y=False)
         X = data.data
         y = data.target
-        y = (y=='P').astype('int').values
+        y = (y=='P').astype('int')#.values
         feature_names = data.feature_names
         target_names = data.target_names
     
     elif dataset == 'credit-card': # Warning: 1) Huge dataset. 2) Etremely Imbalanced: Accuracy not appropriate, use Recall/F1
         data = fetch_openml(data_id=1597, return_X_y=False)
         X = data.data
-        y = data.target.astype('int').values
+        y = data.target.astype('int')#.values
         feature_names = data.feature_names
         target_names = data.target_names
    
@@ -80,8 +80,36 @@ def get_dataset(dataset='half-moons',
         del df['area_code'] #drop categorical attribute
         X = df.values
         feature_names = df.columns
-        y = data.target.astype('int').values
+        y = data.target.astype('int')#.values
         target_names = data.target_names
+
+        #idx = np.random.choice(df.index, 1000)
+        #X, y = X[idx, :], y[idx]
+    
+    elif dataset == 'news': # Warning: Imbalanced! Accuracy not appropriate, use Recall/F1
+        data = fetch_openml(data_id=4545, return_X_y=False)
+        df = pd.DataFrame(data.data, columns=data.feature_names)
+        X = df.values
+        feature_names = df.columns
+        y = data.target.astype('int')#.values
+        y = (y>y.mean()).astype('int')#.values
+        target_names = data.target_names
+        
+        #idx = np.random.choice(df.index, 1000)
+        #X, y = X[idx, :], y[idx]
+        
+    elif dataset == 'boson': # Warning: Imbalanced! Accuracy not appropriate, use Recall/F1
+        data = fetch_openml(data_id=23512, return_X_y=False)
+        df = pd.DataFrame(data.data, columns=data.feature_names)
+        X = df.values
+        feature_names = df.columns
+        y = data.target.astype('int')#.values
+        target_names = data.target_names
+    
+    
+        
+        
+        
 
 
     else:
