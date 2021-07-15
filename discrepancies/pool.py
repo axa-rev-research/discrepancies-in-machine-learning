@@ -4,13 +4,14 @@ import numpy as np
 
 #from autosklearn.classification import AutoSklearnClassifier
 
-from autogluon import TabularPrediction as task
+#from autogluon import TabularPrediction as task
 
 from sklearn.base import BaseEstimator, ClassifierMixin
 
 import sklearn.datasets
 import sklearn.svm
 import sklearn.ensemble
+import sklearn.neighbors
 import sklearn.tree
 
 class Pool(BaseEstimator, ClassifierMixin):
@@ -51,7 +52,8 @@ class Pool(BaseEstimator, ClassifierMixin):
 
 class BasicPool(Pool):
 
-    def __init__(self, models=['SVMrbf', 'SVMpoly', 'SVMsigmoid', 'RF']):
+    def __init__(self, models=['SVMrbf', #'SVMpoly', 
+                               'SVMsigmoid', 'RF50', 'RF100', 'RF200', 'KNN5']):
         
         self._model_types = models
 
@@ -79,14 +81,30 @@ class BasicPool(Pool):
             clf.fit(X,y)
             self.models['SVMsigmoid'] = clf
 
-        if 'RF' in self._model_types:
-            clf = sklearn.ensemble.RandomForestClassifier()
+        if 'RF50' in self._model_types:
+            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=50)
             clf.fit(X,y)
-            self.models['RF'] = clf
+            self.models['RF50'] = clf
+            
+        if 'RF100' in self._model_types:
+            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=100)
+            clf.fit(X,y)
+            self.models['RF100'] = clf
+            
+        if 'RF200' in self._model_types:
+            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=200)
+            clf.fit(X,y)
+            self.models['RF200'] = clf
+            
+        if 'KNN5' in self._model_types:
+            clf = sklearn.neighbors.KNeighborsClassifier(n_neighbors=5)
+            clf.fit(X,y)
+            self.models['KNN5'] = clf
+        
 
         return self
 
-    def predict(self, X, mode='discrepancies'):
+    def predict(self, X, mode='classification'):
 
         if mode == 'discrepancies':
             preds = self.predict_discrepancies(X)
