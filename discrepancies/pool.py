@@ -53,7 +53,9 @@ class Pool(BaseEstimator, ClassifierMixin):
 class BasicPool(Pool):
 
     def __init__(self, models=['SVMrbf', #'SVMpoly', 
-                               'SVMsigmoid', 'RF50', 'RF100', 'RF200', 'KNN5']):
+                               #'SVMsigmoid'#, 
+                                'RF50'#, 'RF100'#, 'RF200', 'KNN5'
+                                ]):
         
         self._model_types = models
 

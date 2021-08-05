@@ -252,7 +252,7 @@ class pool2graph:
         d_u2v = np.linalg.norm(u2_list.values-v_list.values, axis=1)
         d_v2u = np.linalg.norm(v2_list.values-u_list.values, axis=1)
         
-                """
+        """
         Là un truc qui me chagrine est que parmi tous ces nouveaux edges créés, beaucoup seront rejetés à cause des critères de préd/discrepancy. Du coup bon déjà ca sert à rien de les garder, mais surtout on va pas garder en mémoire le fait que certains fake twins vont changer de pred / discrepancy, ce qui peut être vu comme un interval de discrpeancy. J'avais F(X,Blond)=1 et F(T,Brun)=0. J'ai créé FJ tq F(X,Brun)=0. Du coup j'ai X,Brun et T,Brun que je vais finir par jeter. Mais en vrai l'info X,Blond-->X,Brun change de classe est peut être intéressante. C'est un intervalle déjà raffiné.
         On peut se demander si je devrais pas garder tous les chagnements création des FJ et en faire qqc. Si pas de changement
         

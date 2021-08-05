@@ -81,14 +81,16 @@ def get_dataset(dataset='half-moons',
     elif dataset == 'churn': # Warning: Imbalanced! Accuracy not appropriate, use Recall/F1
         data = fetch_openml(data_id=40701, return_X_y=False)
         df = pd.DataFrame(data.data, columns=data.feature_names)
-        del df['area_code'] #drop categorical attribute
+        #del df['area_code'] #drop categorical attribute
+        cat_names = ['area_code']#, 'education']#, 'marital-status', 'occupation', 'relationship', 'native-country']
+        continuous_names = [x for x in df.columns if x not in cat_names]
         X = df.values
         feature_names = df.columns
         y = data.target.astype('int')#.values
         target_names = data.target_names
 
-        #idx = np.random.choice(df.index, 1000)
-        #X, y = X[idx, :], y[idx]
+        idx = np.random.choice(df.index, 5000)
+        X, y = X[idx, :], y[idx]
     
     elif dataset == 'news': # Warning: Imbalanced! Accuracy not appropriate, use Recall/F1
         data = fetch_openml(data_id=4545, return_X_y=False)
@@ -111,7 +113,7 @@ def get_dataset(dataset='half-moons',
         target_names = data.target_names
     
     
-    elif dataset == 'adult': # Warning: Imbalanced! Accuracy not appropriate, use Recall/F1
+    elif dataset == 'adult-num': # Warning: Imbalanced! Accuracy not appropriate, use Recall/F1
         data = fetch_openml(data_id=1590, return_X_y=False)
         df = pd.DataFrame(data.data, columns=data.feature_names)
         to_keep  = ['capital-gain', 'age', 'capital-loss', 'education-num', 'hours-per-week']
@@ -133,8 +135,8 @@ def get_dataset(dataset='half-moons',
     elif dataset == 'adult-cat':
         data = fetch_openml(data_id=1590, return_X_y=False)
         df = pd.DataFrame(data.data, columns=data.feature_names)
-        to_keep  = ['capital-gain', 'age', 'capital-loss', 'education-num', 'hours-per-week', 'sex', 'race', 'education']#, 'marital-status', 'occupation', 'relationship', 'native-country']
-        cat_names = ['sex', 'race', 'education']#, 'marital-status', 'occupation', 'relationship', 'native-country']
+        to_keep  = ['capital-gain', 'age', 'capital-loss', 'education-num', 'hours-per-week', 'sex', 'race', 'education', 'marital-status', 'occupation', 'relationship', 'native-country']
+        cat_names = ['sex', 'race', 'education', 'marital-status', 'occupation', 'relationship', 'native-country']
         continuous_names = [x for x in to_keep if x not in cat_names]
         df = df[to_keep]
         df = pd.get_dummies(df)
@@ -144,11 +146,27 @@ def get_dataset(dataset='half-moons',
         y = (data.target=='>50K').astype('int')#.values
         target_names = data.target_names
         
-        print('taking only 1000 instances')
-        idx = np.random.choice(df.index, 1000, replace=False)
+        print('taking only 10000 instances')
+        idx = np.random.choice(df.index, 10000, replace=False)
         X, y = X[idx, :], y[idx]
         
-
+    elif dataset == 'german':
+        data = fetch_openml(data_id=31, return_X_y=False)
+        df = pd.DataFrame(data.data, columns=data.feature_names)
+        to_keep  = ['duration', 'credit_amount', 'installment_commitment', 'residence_since', 'age', 'existing_credits', 'num_dependents', 'credit_history'] #, 'checking_status', 'purpose', 'saving_status', 'employment', 'personal_status', 'other_parties', 'property_magnitude', 'other_payment_plans', 'housing', 'job', 'own_telephone', 'foreign_worker']
+        cat_names = ['credit_history' ]
+        continuous_names = [x for x in to_keep if x not in cat_names]
+        df = df[to_keep]
+        df = pd.get_dummies(df)
+        cat_names = [x for x in list(df.columns) if x not in continuous_names]
+        X = df.values
+        feature_names = df.columns
+        y = (data.target=='good').astype('int')#.values
+        target_names = data.target_names
+        
+        #print('taking only 1000 instances')
+        #idx = np.random.choice(df.index, 10000, replace=False)
+        #X, y = X[idx, :], y[idx]
 
     else:
         raise ValueError
