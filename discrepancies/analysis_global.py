@@ -5,6 +5,8 @@ import seaborn as sns
 
 from sklearn.tree import DecisionTreeClassifier
 #from .decisiontree_expo import DecisionTree
+from sklearn.metrics import f1_score
+
 
 
 class GlobalDiscrepancyAnalyzer:
@@ -20,7 +22,7 @@ class GlobalDiscrepancyAnalyzer:
         
         self._build_amplitude_dataset()
         self._preprocess_input_data()
-        #self._build_discrepancy_nodes_dataset()
+        self._build_discrepancy_nodes_dataset()
         self._build_nodes_dataset()
         
         
@@ -35,12 +37,13 @@ class GlobalDiscrepancyAnalyzer:
         continuous_changes = pd.DataFrame([di.border_features.T.iloc[:,0] - di.border_features.T.iloc[:,1] for di in self.intervals]) # could be faster is we change how intervals are stored
         continuous_changes = continuous_changes[self.continuous_names].abs()
        
-        if self.categorical_names is not None:
+        if len(self.categorical_names) > 0:
             categorical_coord = pd.DataFrame([di.border_features[self.categorical_names].iloc[0, :] for di in self.intervals])
             self.X[self.categorical_names] = (self.X[self.categorical_names] > 0).astype('int')
 
-        
-        self.amplitude_dataset = continuous_changes.join(categorical_coord.reset_index(drop=True))
+            self.amplitude_dataset = continuous_changes.join(categorical_coord.reset_index(drop=True))
+        else:
+            self.amplitude_dataset = continuous_changes
         print("Intervals amplitude dataset (self.amplitude_dataset): shape", self.amplitude_dataset.shape)
     
     
@@ -49,7 +52,7 @@ class GlobalDiscrepancyAnalyzer:
         Preprocess:
             - Categorical features in 0-1
         """
-        if self.categorical_names is not None:
+        if len(self.categorical_names)  > 0:
             self.X[self.categorical_names] = (self.X[self.categorical_names] > 0).astype('int')
             
         self.X["discrepancies"] = self.pool.predict_discrepancies(self.X).values
@@ -62,7 +65,7 @@ class GlobalDiscrepancyAnalyzer:
         """
         self.disc_nodes_dataset = [n[1]['features'] for n in self.p2g.G.nodes(data=True) if n[1]['discrepancies'] == 1]
         self.disc_nodes_dataset = pd.DataFrame(self.disc_nodes_dataset)
-        if self.categorical_names is not None:
+        if len(self.categorical_names) > 0:
             self.disc_nodes_dataset[self.categorical_names] = (self.disc_nodes_dataset[self.categorical_names] > 0).astype('int')
             
     def _build_nodes_dataset(self):
@@ -71,7 +74,7 @@ class GlobalDiscrepancyAnalyzer:
         """
         self.nodes_dataset = [n[1]['features'] for n in self.p2g.G.nodes(data=True)]
         self.nodes_dataset = pd.DataFrame(self.nodes_dataset)
-        if self.categorical_names is not None:
+        if len(self.categorical_names) > 0:
             self.nodes_dataset[self.categorical_names] = (self.nodes_dataset[self.categorical_names] > 0).astype('int')
             
         discs = np.array([n[1]['discrepancies'] for n in self.p2g.G.nodes(data=True)])
@@ -96,7 +99,7 @@ class GlobalDiscrepancyAnalyzer:
         
         out_dict['continuous_features'] = self.amplitude_dataset[self.continuous_names].mean(axis=0).sort_values(ascending=False)
         
-        if self.categorical_names is not None:
+        if len(self.categorical_names) > 0:
             ### Maybe a class parameter? Or do we want to change it everytime ?
             features_with_min_expo = [c for c in self.categorical_names if self.X.sum(axis=0)[c] >= min_expo]
             
@@ -124,19 +127,25 @@ class GlobalDiscrepancyAnalyzer:
             plt.show()
         
             
-    def get_discrepancy_segments(self, X_exposition=None, min_expo=0, min_purity=0.0, min_purity_expo=0.0):
+    def get_discrepancy_segments(self, X_exposition=None, y_exposition=None, min_expo=0, min_purity=0.0, min_purity_expo=0.0):
         #inspired from https://scikit-learn.org/stable/auto_examples/tree/plot_unveil_tree_structure.html
         
+        if len(self.categorical_names) > 0:
+            X_exposition[self.categorical_names] = (X_exposition[self.categorical_names] > 0).astype('int')
+        
         node_train = np.array(self.nodes_dataset.iloc[:,:-1])
+        node_train = np.array(self.nodes_dataset.iloc[:,:-1].append(X_exposition))
         node_y = self.nodes_dataset["discrepancies"].values
+        node_y = self.pool.predict_discrepancies(node_train).values
         
         dt = DecisionTreeClassifier(min_samples_expo=min_expo)
         dt.fit(node_train, node_y, X_expo=X_exposition)
+        self.cart_discrepancies = dt
         
         #a enlever?
-        y_exposition = self.pool.predict_discrepancies(X_exposition)
+        y_disc_exposition = self.pool.predict_discrepancies(X_exposition)
         print('accuracy', dt.score(node_train, node_y))
-        print('accuracy on given data', dt.score(X_exposition, y_exposition))
+        print('accuracy on given data', dt.score(X_exposition, y_disc_exposition))
         
         
         feature = dt.tree_.feature
@@ -152,6 +161,7 @@ class GlobalDiscrepancyAnalyzer:
         leaves_list = list(set(node_leaves))
         representants = {}
         
+        self.leaf_found = []
         for leaf_index in leaves_list:
 
             representant_id = np.where(node_leaves == leaf_index)[0][0] #first one
@@ -160,12 +170,30 @@ class GlobalDiscrepancyAnalyzer:
             # list of nodes activated by the representant
             node_index = node_indicator.indices[node_indicator.indptr[representant_id]:node_indicator.indptr[representant_id + 1]]
             
-            segment_exposition = len(np.where(leaves_expo == leaf_index)[0]) / X_exposition.shape[0]
+            X_segment_expo = X_exposition.iloc[np.where(leaves_expo == leaf_index)[0], :]
+            y_segment_expo = y_exposition.iloc[np.where(leaves_expo == leaf_index)[0]]
+            
+            segment_exposition = X_segment_expo.shape[0]/ X_exposition.shape[0]
+            #segment_exposition = len(np.where(leaves_expo == leaf_index)[0]) / X_exposition.shape[0]
             segment_purity = self.pool.predict_discrepancies(node_train[np.where(node_leaves == leaf_index)[0], :]).mean()
-            segment_purity_expo = self.pool.predict_discrepancies(X_exposition.iloc[np.where(leaves_expo == leaf_index)[0], :]).mean()
+            
+            try:
+                segment_purity_expo = self.pool.predict_discrepancies(X_segment_expo).mean()
+            except ValueError: #if no expo in segment (may happen if min_expo =0)
+                segment_purity_expo = 0
+                
             if ((segment_purity < min_purity) or
                 (segment_purity_expo < min_purity_expo)):
                 continue
+                
+            preds_segment = self.pool.predict(X_segment_expo)
+            segment_accuracy_expo = {c: f1_score(y_segment_expo, preds_segment[c]) for c in preds_segment.columns}
+
+            
+            self.leaf_found.append(leaf_index)
+            
+            n_nodes_segment = len(np.where(node_leaves == leaf_index)[0]) / node_leaves.shape[0]
+            
             
             print("====== SEGMENT {segment} ======".format(segment=leaf_index))
             print("=== Segment description:")
@@ -173,6 +201,7 @@ class GlobalDiscrepancyAnalyzer:
                   # continue to the next node if it is a leaf node
                 if node_leaves[representant_id] == node_id:
                       continue
+                        
                 
                     # check if value of the split feature for sample 0 is below threshold
                 if (node_train[representant_id, feature[node_id]] <= threshold[node_id]):
@@ -189,13 +218,28 @@ class GlobalDiscrepancyAnalyzer:
                   
             print("=== Segment characteristics")
             print("Segment exposition: {expo}".format(expo=segment_exposition))
+            print("Segment node population (proxy for size?): {n_nodes}".format(n_nodes=n_nodes_segment))
             print("Segment purity: {purity}".format(purity=segment_purity))
             print("Segment purity (X_expo): {purity_expo}".format(purity_expo=segment_purity_expo))
-              
+            print("Accuracy of classifiers (X_expo) on segment: {acc_segment}".format(acc_segment=segment_accuracy_expo))
+        print("Number of discrepancy segments found: %i"%len(self.leaf_found))
             
               
-                
-  
+    """def plot_tsne(self, n_samples=1000, ):
+        data = gda.disc_nodes_dataset.iloc[:n_samples, :]
+        data_leaves = self.cart_discrepancies.apply(data)
+        
+        palette = ["red", "blue", "green", "purple", "orange", "yellow", "lime", "cyan"] 
+        
+        #TODO
+        is_segment = [
+        colors = [palette[i] for i
+        
+        tsne = TSNE(perplexity=30, n_jobs=-1).fit_transform(data)
+        tsne = pd.DataFrame(tsne, columns=["Dim 0", "Dim 1"])
+        return 2"""
+
+
         
         
 def get_tree_path(dt, representant):
@@ -212,45 +256,6 @@ def get_segment_characteristics(segment_index, dt, X_expo):
     
 
 
-    
-def get_lineage(tree, feature_names):
-    left      = tree.tree_.children_left
-    right     = tree.tree_.children_right
-    threshold = tree.tree_.threshold
-    features  = [feature_names[i] for i in tree.tree_.feature]
-
-    # get ids of child nodes
-    idx = np.argwhere(left == -1)[:,0]     
-
-    paths = []
-    
-    def recurse(left, right, child, lineage=None):          
-        if lineage is None:
-            lineage = [int(child)]
-        if child in left:
-            parent = np.where(left == child)[0].item()
-            split = 'l'
-        else:
-            parent = np.where(right == child)[0].item()
-            split = 'r'
-
-        lineage.append((parent, split, threshold[parent], features[parent]))
-
-        if parent == 0:
-            lineage.reverse()
-            return lineage
-        else:
-            return recurse(left, right, parent, lineage)
-
-    for child in idx:
-        path = []
-        for node in recurse(left, right, child):
-            path.append(node)
-        paths.append(path)
-        
-    return paths
-    
-    
     
     
     

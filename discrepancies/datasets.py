@@ -95,6 +95,7 @@ def get_dataset(dataset='half-moons',
     elif dataset == 'news': # Warning: Imbalanced! Accuracy not appropriate, use Recall/F1
         data = fetch_openml(data_id=4545, return_X_y=False)
         df = pd.DataFrame(data.data, columns=data.feature_names)
+        del df['url']
         X = df.values
         feature_names = df.columns
         y = data.target.astype('int')#.values
@@ -146,8 +147,8 @@ def get_dataset(dataset='half-moons',
         y = (data.target=='>50K').astype('int')#.values
         target_names = data.target_names
         
-        print('taking only 10000 instances')
-        idx = np.random.choice(df.index, 10000, replace=False)
+        print('taking only 3000 instances')
+        idx = np.random.choice(df.index, 3000, replace=False)
         X, y = X[idx, :], y[idx]
         
     elif dataset == 'german':
