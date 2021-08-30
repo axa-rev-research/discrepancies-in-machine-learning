@@ -3,8 +3,10 @@ import pandas as pd
 import numpy as np
 
 #from autosklearn.classification import AutoSklearnClassifier
-
 #from autogluon import TabularPrediction as task
+
+#from tpot import TPOTClassifier
+
 
 from sklearn.base import BaseEstimator, ClassifierMixin
 
@@ -13,6 +15,9 @@ import sklearn.svm
 import sklearn.ensemble
 import sklearn.neighbors
 import sklearn.tree
+import sklearn.metrics
+import xgboost as xgb
+import sklearn.linear_model
 
 class Pool(BaseEstimator, ClassifierMixin):
 
@@ -52,9 +57,10 @@ class Pool(BaseEstimator, ClassifierMixin):
 
 class BasicPool(Pool):
 
-    def __init__(self, models=['SVMrbf', #'SVMpoly', 
-                               #'SVMsigmoid'#, 
-                                'RF50'#, 'RF100'#, 'RF200', 'KNN5'
+    def __init__(self, models=['SVMrbf', 'XGB', #'SVMpoly', 
+                               #'SVMsigmoid'#,
+                               #'LR',
+                                #'RF200', 'RF100'#, 'RF200', 'KNN5'
                                 ]):
         
         self._model_types = models
@@ -69,7 +75,7 @@ class BasicPool(Pool):
         self.models = {}
 
         if 'SVMrbf' in self._model_types:
-            clf = sklearn.svm.SVC(kernel='rbf')
+            clf = sklearn.svm.SVC(kernel='rbf', probability=True)
             clf.fit(X,y)
             self.models['SVMrbf'] = clf
 
@@ -89,12 +95,12 @@ class BasicPool(Pool):
             self.models['RF50'] = clf
             
         if 'RF100' in self._model_types:
-            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=100)
+            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=100, max_depth=3)
             clf.fit(X,y)
             self.models['RF100'] = clf
             
         if 'RF200' in self._model_types:
-            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=200)
+            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=200, max_depth=3)
             clf.fit(X,y)
             self.models['RF200'] = clf
             
@@ -103,6 +109,15 @@ class BasicPool(Pool):
             clf.fit(X,y)
             self.models['KNN5'] = clf
         
+        if 'XGB' in self._model_types:
+            clf = xgb.XGBClassifier(max_depth=3)
+            clf.fit(X,y)
+            self.models['XGB'] = clf
+            
+        if 'LR' in self._model_types:
+            clf = sklearn.linear_model.LogisticRegression()
+            clf.fit(X,y)
+            self.models['LR'] = clf
 
         return self
 
@@ -146,6 +161,14 @@ class BasicPool(Pool):
     def predict_mode(self, X):
         preds = self.predict(X)
         return preds.mode(axis=1)
+    
+    def get_performances(self, X, y):
+
+        preds = self.predict(X)
+        f1_scores = {}
+        for c in self.models:
+            f1_scores[c] = sklearn.metrics.f1_score(y, preds[c])
+        return f1_scores
 
 
 class AutoSklearnPool(Pool):
@@ -308,3 +331,88 @@ class AutogluonPool(Pool):
         leaderboard = self.predictor.leaderboard(test_data, silent=True)
 
         return performance, leaderboard
+    
+    
+'''
+class TPOTPool(Pool):
+
+    def __init__(self, max_delta_accuracies=0.05):
+        self.max_delta_accuracies = max_delta_accuracies
+
+
+    def fit(self, X, y, output_directory, time_limit=100):
+
+        self.X_columns = X.columns.to_list()
+        train_data = self.get_df_4_tpot(X,y)
+
+        self.predictor = TPOTClassifier(verbosity=2, max_time_mins=2, max_eval_time_mins=0.04, population_size=40)        
+        tpot.fit(train_data.iloc[:, :-1], train_data[:, -1])
+        
+        # introducing delta max accuracies for autogluon
+        test_data = self.get_df_4_tpot(X, y)
+        leaderboard = self.predictor.leaderboard(test_data, silent=True)
+        lowerbound_accuracy = np.max(leaderboard['score_test'])*(1-self.max_delta_accuracies)
+        accuracies = leaderboard['score_test']
+        self.predictor.delete_models(models_to_keep=leaderboard[leaderboard.score_test >= lowerbound_accuracy]['model'].tolist(), dry_run=False)
+        
+        #hotfix to align with autosklearn's nomenclature
+        self.models = self.predictor.get_model_names()
+        print('apres suppression')
+        print(self.models)
+        return self
+    
+    
+
+    def predict(self, X, mode='classification', models_to_include=None):
+        
+        if not (isinstance(X,pd.DataFrame) or isinstance(X,task.Dataset)):
+            X = pd.DataFrame(X, columns=self.X_columns)
+
+        if mode == 'classification':
+
+            preds = {}
+            for p in self.predictor.get_model_names():
+                if (models_to_include is None) or (p in models_to_include):
+                    preds[p] = self.predictor.predict(X, model=p)
+                
+            preds = pd.DataFrame(preds)
+
+        elif mode == 'autogluon':
+
+            preds = self.predictor.predict_proba(X, as_multiclass=True)
+
+
+        return preds
+
+
+    def predict_discrepancies(self, X):
+        """
+        return 0 if no discrepancy between classifier for the prediction, return 1 if there are discrepancies
+        """
+
+        preds = self.predict(X)
+        preds = preds.nunique(axis=1)
+        # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
+        return (preds>1).astype(int)
+
+
+    def get_df_4_tpot(self, X, y):
+        """
+        X: pd.DataFrame, input data
+        y: pd.Series, 1D target
+        """
+
+        df = pd.concat((X,y), axis=1)
+        df.columns = X.columns.to_list()+['class']
+        
+        return df
+
+
+    def get_performances(self, X, y):
+
+        test_data = self.get_df_4_autogluon(X, y)
+
+        performance = self.predictor.evaluate(test_data)
+        leaderboard = self.predictor.leaderboard(test_data, silent=True)
+
+        return performance, leaderboard'''

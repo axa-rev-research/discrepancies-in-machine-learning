@@ -17,7 +17,6 @@ def discrepancy_score(p2g, run, X, pool, method='knn'):
     discr_true = pool.predict_discrepancies(X)
     
     discr_pred = p2g.predict_discrepancies_from_graph(X, k_neighbors=run.k_neighbors, method=method)
-      
     return f1_score(discr_true, discr_pred)
 
   

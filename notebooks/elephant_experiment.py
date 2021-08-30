@@ -43,7 +43,7 @@ def setup_experiment(_DATASETS, _POOL, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_S
 
         # Get dataset
         DATASETS[d] = {}
-        DATASETS[d]['X_train'], DATASETS[d]['X_test'], DATASETS[d]['y_train'], DATASETS[d]['y_test'], DATASETS[d]['scaler'], DATASETS[d]['feature_names'], DATASETS[d]['target_names'] = datasets.get_dataset(dataset=d, n_samples=1000, noise=0.3)
+        DATASETS[d]['X_train'], DATASETS[d]['X_test'], DATASETS[d]['y_train'], DATASETS[d]['y_test'], DATASETS[d]['scaler'], DATASETS[d]['feature_names'], DATASETS[d]['target_names'], DATASETS[d]['categorical_names'] = datasets.get_dataset(dataset=d, n_samples=1000, noise=0.3)
                 
         # Draw MC eval samples
         MC_SAMPLING[d]={}
@@ -57,6 +57,7 @@ def setup_experiment(_DATASETS, _POOL, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_S
             if p == 'Basic':
                 pool_run = pool.BasicPool()
                 pool_run = pool_run.fit(DATASETS[d]['X_train'], DATASETS[d]['y_train'])
+                print(pool_run.get_performances(DATASETS[d]['X_train'], DATASETS[d]['y_train']))
             elif p == 'AutoGluon':
                 pool_run = pool.AutogluonPool(max_delta_accuracies=_MAX_DELTA_ACCURACIES)
                 pool_run = pool_run.fit(DATASETS[d]['X_train'], DATASETS[d]['y_train'], output_directory=None)
@@ -170,7 +171,7 @@ def main():
         for i in range(N_REPLICATION):
             print('============== ITERATION %i'%i)
             
-            OUTPUT_DIR = pathlib.Path(str(pathlib.Path('../..').resolve())+'/results/'+str(time_expe)+'#'+str(expe)+'_'+str(i))
+            OUTPUT_DIR = pathlib.Path(str(pathlib.Path('../..').resolve())+'/results2/'+str(time_expe)+'#'+str(expe)+'_'+str(i))
             OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
             OUTPUT_DIR = str(OUTPUT_DIR)+'/'
 

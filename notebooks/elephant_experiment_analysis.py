@@ -20,7 +20,7 @@ import sys, os
 
 def get_all_expe():
     
-    OUTPUT_DIR = pathlib.Path(str(pathlib.Path('../..').resolve())+'/results/')
+    OUTPUT_DIR = pathlib.Path(str(pathlib.Path('../..').resolve())+'/results2/')
     
     ldir = [n for n in os.listdir(OUTPUT_DIR) if '#' in n]
     runs = list(set([n.split('_')[0] for n in ldir]))
@@ -28,7 +28,7 @@ def get_all_expe():
 
 def get_replications(expe):
     
-    OUTPUT_DIR = pathlib.Path(str(pathlib.Path('../..').resolve())+'/results/')
+    OUTPUT_DIR = pathlib.Path(str(pathlib.Path('../..').resolve())+'/results2/')
     
     runs = [n for n in os.listdir(OUTPUT_DIR) if expe in n]
     return runs
@@ -36,7 +36,7 @@ def get_replications(expe):
 
 def get_expe_results(run):
     
-    OUTPUT_DIR = pathlib.Path(str(pathlib.Path('../..').resolve())+'/results/')
+    OUTPUT_DIR = pathlib.Path(str(pathlib.Path('../..').resolve())+'/results2/')
 
     repls = get_replications(run)
     

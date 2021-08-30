@@ -68,6 +68,8 @@ class GlobalDiscrepancyAnalyzer:
         if len(self.categorical_names) > 0:
             self.disc_nodes_dataset[self.categorical_names] = (self.disc_nodes_dataset[self.categorical_names] > 0).astype('int')
             
+        print("Discrepancy nodes dataset (self.nodes_dataset): shape", self.disc_nodes_dataset.shape)
+            
     def _build_nodes_dataset(self):
         """
         Output dataset: one row for each node that was in a discrepancy area.
@@ -193,6 +195,7 @@ class GlobalDiscrepancyAnalyzer:
             self.leaf_found.append(leaf_index)
             
             n_nodes_segment = len(np.where(node_leaves == leaf_index)[0]) / node_leaves.shape[0]
+            n_disc_nodes_segment = len(np.where((node_leaves == leaf_index) & (node_y == True))[0]) / node_leaves.shape[0]
             
             
             print("====== SEGMENT {segment} ======".format(segment=leaf_index))
@@ -219,10 +222,14 @@ class GlobalDiscrepancyAnalyzer:
             print("=== Segment characteristics")
             print("Segment exposition: {expo}".format(expo=segment_exposition))
             print("Segment node population (proxy for size?): {n_nodes}".format(n_nodes=n_nodes_segment))
+            print("Percent of the discrepancy nodes contained here: {n_nodes}".format(n_nodes=n_disc_nodes_segment))
             print("Segment purity: {purity}".format(purity=segment_purity))
             print("Segment purity (X_expo): {purity_expo}".format(purity_expo=segment_purity_expo))
-            print("Accuracy of classifiers (X_expo) on segment: {acc_segment}".format(acc_segment=segment_accuracy_expo))
+            print("Accuracy of classifiers (F1 on X_expo) on segment: {acc_segment}".format(acc_segment=segment_accuracy_expo))
         print("Number of discrepancy segments found: %i"%len(self.leaf_found))
+        
+        #save tree (useful for other stuff...not clean)
+        self.segments_tree = dt
             
               
     """def plot_tsne(self, n_samples=1000, ):

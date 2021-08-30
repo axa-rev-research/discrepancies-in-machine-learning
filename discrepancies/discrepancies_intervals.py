@@ -99,7 +99,7 @@ def get_path_discrepancies(path, G):
         # If the current node has discrepancies
         if G.nodes(data=True)[path[i]]['discrepancies']==1:
             # If it is either the first node of the path OR the previous node along the path doesn't have discrepancies
-            if i==0 or discrepancies[-1]==0:
+            if i==0 or discrepancies[i-1]==0:# T: pq discrepancies[-1] ??? SHOULD BE i-1???? JAI CHANGE
                 # Then increment the counter (new on-contiguous discrepancies interval)
                 num_discrepancies += 1
             # State that the current node belong to a discrepancies interval

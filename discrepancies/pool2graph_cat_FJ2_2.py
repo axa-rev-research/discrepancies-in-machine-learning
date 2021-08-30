@@ -174,11 +174,13 @@ class pool2graph:
             _NN = _NN.fit(X_nn)
             lnodes_index = lnodes_DP[(lnodes_DP.pred==p) & (lnodes_DP.discrepancies==0)].index
             _distances, _indices = _NN.kneighbors(nodes_features.loc[lnodes_index])
-            _indices = nodes_features.index[_indices]
+            #_indices = nodes_features.index[_indices]
+            _indices = X_nn.index[_indices]
 
             #Generate pairs of nodes to be connected by an edge and format, with standard edge format: (node1,node2, {'distance':edge_length})
             for i in range(len(_indices)):
-                _e = [(_indices[i][0], _indices[i][j], {'distance':_distances[i][j]}) for j in range(1,len(_indices[i]))]
+                #_e = [(_indices[i][0], _indices[i][j], {'distance':_distances[i][j]}) for j in range(1,len(_indices[i]))]
+                _e = [(lnodes_index[i], _indices[i][j], {'distance':_distances[i][j]}) for j in range(len(_indices[i]))]
                 _edges = _edges + _e
                 
         
