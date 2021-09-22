@@ -70,6 +70,13 @@ def get_dataset(dataset='half-moons',
         y = (y=='P').astype('int')#.values
         feature_names = data.feature_names
         target_names = data.target_names
+        
+    elif dataset == 'boston-reg':
+        data = fetch_openml(data_id=531, return_X_y=False)
+        X = data.data
+        y = data.target
+        feature_names = data.feature_names
+        target_names = data.target_names
     
     elif dataset == 'credit-card': # Warning: 1) Huge dataset. 2) Etremely Imbalanced: Accuracy not appropriate, use Recall/F1
         data = fetch_openml(data_id=1597, return_X_y=False)

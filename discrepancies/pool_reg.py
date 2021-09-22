@@ -17,7 +17,10 @@ import sklearn.neighbors
 import sklearn.tree
 import sklearn.metrics
 import xgboost as xgb
+
 import sklearn.linear_model
+import sklearn.neural_network
+
 
 class Pool(BaseEstimator, ClassifierMixin):
 
@@ -56,13 +59,7 @@ class Pool(BaseEstimator, ClassifierMixin):
 
 
 class BasicPool(Pool):
-    def __init__(self, models=['SVMrbf', 
-                               #'SVMsigmoid'#,
-                               #'GB',
-                               'XGB',
-                               'LR',
-                                'RF200', 'RF100', 
-                               'KNN5'
+    def __init__(self, models=['LR', 'MLP'
                                 ]):
         
         self._model_types = models
@@ -76,64 +73,25 @@ class BasicPool(Pool):
 
         self.models = {}
 
-        if 'SVMrbf' in self._model_types:
-            clf = sklearn.svm.SVC(kernel='rbf', probability=True)
-            clf.fit(X,y)
-            self.models['SVMrbf'] = clf
-
-        if 'SVMpoly' in self._model_types:
-            clf = sklearn.svm.SVC(kernel='poly')
-            clf.fit(X,y)
-            self.models['SVMpoly'] = clf
-
-        if 'SVMsigmoid' in self._model_types: 
-            clf = sklearn.svm.SVC(kernel='sigmoid')
-            clf.fit(X,y)
-            self.models['SVMsigmoid'] = clf
-
-        if 'RF50' in self._model_types:
-            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=50)
-            clf.fit(X,y)
-            self.models['RF50'] = clf
-            
-        if 'RF100' in self._model_types:
-            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=200, max_depth=3)
-            clf.fit(X,y)
-            self.models['RF100'] = clf
-            
-        if 'RF200' in self._model_types:
-            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=200, max_depth=10)
-            clf.fit(X,y)
-            self.models['RF200'] = clf
-            
-        if 'KNN5' in self._model_types:
-            clf = sklearn.neighbors.KNeighborsClassifier(n_neighbors=15)
-            clf.fit(X,y)
-            self.models['KNN5'] = clf
         
-        if 'XGB' in self._model_types:
-            clf = xgb.XGBClassifier(max_depth=10)
-            clf.fit(X,y)
-            self.models['XGB'] = clf
-            
         if 'LR' in self._model_types:
-            clf = sklearn.linear_model.LogisticRegression()
+            clf = sklearn.linear_model.LinearRegression(fit_intercept=True)
             clf.fit(X,y)
             self.models['LR'] = clf
             
-        if 'GB' in self._model_types:
-            clf = sklearn.ensemble.GradientBoostingClassifier(n_estimators=200)
+        if 'MLP' in self._model_types:
+            clf = sklearn.neural_network.MLPRegressor()
             clf.fit(X,y)
-            self.models['GB'] = clf
+            self.models['MLP'] = clf
 
         return self
 
-    def predict(self, X, mode='classification'):
+    def predict(self, X, mode='regression'):
 
         if mode == 'discrepancies':
             preds = self.predict_discrepancies(X)
 
-        elif mode == 'classification':
+        elif mode == 'regression':
             preds = {}
             for p in self.models:
                 preds[p] = self.models[p].predict(X)
@@ -141,7 +99,7 @@ class BasicPool(Pool):
 
         return preds
 
-    def predict_proba(self, X, target=0):
+    """def predict_proba(self, X, target=0):
 
         preds = {}
         for p in self.models:
@@ -153,18 +111,22 @@ class BasicPool(Pool):
                 preds[p] = a
         preds = pd.DataFrame(preds)
 
-        return preds
+        return preds"""
 
-    def predict_discrepancies(self, X):
+    def predict_discrepancies(self, X, threshold=None):
         """
         return 0 if no discrepancy between classifier for the prediction, return 1 if there are discrepancies
         """
-        preds = self.predict(X, mode='classification')
-        preds = preds.nunique(axis=1)
+        preds = self.predict(X, mode='regression')
+
+        if threshold is None:
+            threshold = (preds.max(axis=1) - preds.min(axis=1)).mean() #random...
+        preds = (preds.max(axis=1) - preds.min(axis=1) > threshold).astype(int)
+
         # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
-        return (preds>1).astype(int)
+        return preds
 
-
+    
     def predict_mode(self, X):
         preds = self.predict(X)
         return preds.mode(axis=1)
