@@ -60,9 +60,9 @@ class BasicPool(Pool):
                                #'SVMsigmoid'#,
                                #'GB',
                                'XGB',
-                               'LR',
-                                'RF200', 'RF100', 
-                               'KNN5'
+                               #'LR',
+                               # 'RF200', 'RF100', 
+                               #'KNN5'
                                 ]):
         
         self._model_types = models

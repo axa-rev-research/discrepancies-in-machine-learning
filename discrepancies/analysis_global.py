@@ -3,8 +3,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from sklearn.tree import DecisionTreeClassifier
-#from .decisiontree_expo import DecisionTree
+#from sklearn.tree import DecisionTreeClassifier
+from sktree.tree import DecisionTreeClassifier
 from sklearn.metrics import f1_score
 
 
@@ -146,8 +146,8 @@ class GlobalDiscrepancyAnalyzer:
         
         #a enlever?
         y_disc_exposition = self.pool.predict_discrepancies(X_exposition)
-        print('accuracy', dt.score(node_train, node_y))
-        print('accuracy on given data', dt.score(X_exposition, y_disc_exposition))
+        print('accuracy', (dt.predict(node_train) == node_y).mean())
+        print('accuracy on given data', (dt.predict(X_exposition) == y_disc_exposition).mean())
         
         
         feature = dt.tree_.feature
