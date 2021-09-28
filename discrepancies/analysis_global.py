@@ -5,7 +5,7 @@ import seaborn as sns
 
 #from sklearn.tree import DecisionTreeClassifier
 from sktree.tree import DecisionTreeClassifier
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, recall_score, precision_score
 
 
 
@@ -132,31 +132,31 @@ class GlobalDiscrepancyAnalyzer:
     def get_discrepancy_segments(self, X_exposition=None, y_exposition=None, min_expo=0, min_purity=0.0, min_purity_expo=0.0):
         #inspired from https://scikit-learn.org/stable/auto_examples/tree/plot_unveil_tree_structure.html
         
+        prediction_X_expo = self.pool.predict(X_exposition)
+        
         if len(self.categorical_names) > 0:
             X_exposition[self.categorical_names] = (X_exposition[self.categorical_names] > 0).astype('int')
         
-        node_train = np.array(self.nodes_dataset.iloc[:,:-1])
-        node_train = np.array(self.nodes_dataset.iloc[:,:-1].append(X_exposition))
-        node_y = self.nodes_dataset["discrepancies"].values
+        cols = [c for c in self.X.columns if c != "discrepancies"]
+        node_train = np.array(self.nodes_dataset[cols])
+        node_train = np.array(self.nodes_dataset[cols].append(X_exposition[cols]))
         node_y = self.pool.predict_discrepancies(node_train).values
         
         dt = DecisionTreeClassifier(min_samples_expo=min_expo)
         dt.fit(node_train, node_y, X_expo=X_exposition)
-        self.cart_discrepancies = dt
+        #self.cart_discrepancies = dt
         
         #a enlever?
         y_disc_exposition = self.pool.predict_discrepancies(X_exposition)
-        print('accuracy', (dt.predict(node_train) == node_y).mean())
-        print('accuracy on given data', (dt.predict(X_exposition) == y_disc_exposition).mean())
-        
+        print('Discrepancy segments tree accuracy on nodes:', f1_score(node_y, dt.predict(node_train)))
+        print('... on exposition data', f1_score(y_disc_exposition, dt.predict(X_exposition)))
         
         feature = dt.tree_.feature
         threshold = dt.tree_.threshold
         
-        
         node_leaves = dt.apply(node_train)
         leaves_expo = dt.apply(X_exposition)
-        node_indicator = dt.decision_path(node_train)
+        treenode_indicator = dt.decision_path(node_train)
         
         
         # get the decision path of one instance of each leaf
@@ -164,60 +164,63 @@ class GlobalDiscrepancyAnalyzer:
         representants = {}
         
         self.leaf_found = []
+        # iteration over leaves
         for leaf_index in leaves_list:
-
-            representant_id = np.where(node_leaves == leaf_index)[0][0] #first one
-            representant_features = node_train[representant_id, :]
-    
-            # list of nodes activated by the representant
-            node_index = node_indicator.indices[node_indicator.indptr[representant_id]:node_indicator.indptr[representant_id + 1]]
             
+            #get exposition in segment                  
             X_segment_expo = X_exposition.iloc[np.where(leaves_expo == leaf_index)[0], :]
             y_segment_expo = y_exposition.iloc[np.where(leaves_expo == leaf_index)[0]]
             
             segment_exposition = X_segment_expo.shape[0]/ X_exposition.shape[0]
-            #segment_exposition = len(np.where(leaves_expo == leaf_index)[0]) / X_exposition.shape[0]
             segment_purity = self.pool.predict_discrepancies(node_train[np.where(node_leaves == leaf_index)[0], :]).mean()
             
             try:
                 segment_purity_expo = self.pool.predict_discrepancies(X_segment_expo).mean()
             except ValueError: #if no expo in segment (may happen if min_expo =0)
-                segment_purity_expo = 0
+                segment_purity_expo = 0.0
                 
             if ((segment_purity < min_purity) or
                 (segment_purity_expo < min_purity_expo)):
                 continue
-                
-            preds_segment = self.pool.predict(X_segment_expo)
-            segment_accuracy_expo = {c: f1_score(y_segment_expo, preds_segment[c]) for c in preds_segment.columns}
+            
+            # get accuracy of clef in segment on expo
+            #preds_segment_expo = self.pool.predict(X_segment_expo) #PROBLEME ICI CAR X_expo categorielles ont ete mises à 0;1
+            preds_segment_expo = prediction_X_expo.iloc[np.where(leaves_expo == leaf_index)[0], :]
+            segment_accuracy_expo = {c: f1_score(y_segment_expo, preds_segment_expo[c]) for c in preds_segment_expo.columns}
 
+            # get segment size
+            n_nodes_segment = len(np.where(node_leaves == leaf_index)[0]) / node_leaves.shape[0]
+            n_disc_nodes_segment = len(np.where((node_leaves == leaf_index) & (node_y == True))[0]) / (node_y == True).sum()
+            
+            
+            
+            # get segment path
+            #get one representative
+            leaf_representant_id = np.where(node_leaves == leaf_index)[0][0] #first one
+            leaf_representant_features = node_train[leaf_representant_id, :]
+            # get list of tree nodes activated by the representant
+            treenode_index = treenode_indicator.indices[treenode_indicator.indptr[leaf_representant_id]: treenode_indicator.indptr[leaf_representant_id + 1]]
             
             self.leaf_found.append(leaf_index)
-            
-            n_nodes_segment = len(np.where(node_leaves == leaf_index)[0]) / node_leaves.shape[0]
-            n_disc_nodes_segment = len(np.where((node_leaves == leaf_index) & (node_y == True))[0]) / node_leaves.shape[0]
-            
-            
             print("====== SEGMENT {segment} ======".format(segment=leaf_index))
             print("=== Segment description:")
-            for node_id in node_index:
+            for treenode_id in treenode_index:
                   # continue to the next node if it is a leaf node
-                if node_leaves[representant_id] == node_id:
+                if node_leaves[leaf_representant_id] == treenode_id:
                       continue
                         
-                
-                    # check if value of the split feature for sample 0 is below threshold
-                if (node_train[representant_id, feature[node_id]] <= threshold[node_id]):
+                # check if value of the split feature for sample 0 is below threshold
+                if (node_train[leaf_representant_id, feature[treenode_id]] <= threshold[treenode_id]):
                     threshold_sign = "<="
                 else:
                     threshold_sign = ">"
 
                 print("decision node {node} : {feature} "
                     "{inequality} {threshold})".format(
-                              node=node_id,
-                              feature=self.X.columns[feature[node_id]],
+                              node=treenode_id,
+                              feature=self.X.columns[feature[treenode_id]],
                               inequality=threshold_sign,
-                              threshold=threshold[node_id]))
+                              threshold=threshold[treenode_id]))
                   
             print("=== Segment characteristics")
             print("Segment exposition: {expo}".format(expo=segment_exposition))
@@ -228,7 +231,7 @@ class GlobalDiscrepancyAnalyzer:
             print("Accuracy of classifiers (F1 on X_expo) on segment: {acc_segment}".format(acc_segment=segment_accuracy_expo))
         print("Number of discrepancy segments found: %i"%len(self.leaf_found))
         
-        #save tree (useful for other stuff...not clean)
+        #save tree (useful for other stuff...not clean). it was saved twice!
         self.segments_tree = dt
             
               
