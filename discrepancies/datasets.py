@@ -161,8 +161,39 @@ def get_dataset(dataset='half-moons',
     elif dataset == 'german':
         data = fetch_openml(data_id=31, return_X_y=False)
         df = pd.DataFrame(data.data, columns=data.feature_names)
-        to_keep  = ['duration', 'credit_amount', 'installment_commitment', 'residence_since', 'age', 'existing_credits', 'num_dependents', 'credit_history'] #, 'checking_status', 'purpose', 'saving_status', 'employment', 'personal_status', 'other_parties', 'property_magnitude', 'other_payment_plans', 'housing', 'job', 'own_telephone', 'foreign_worker']
-        cat_names = ['credit_history' ]
+        to_keep  = ['duration',
+                    'credit_amount',
+                    'installment_commitment',
+                    'residence_since',
+                    'age',
+                    'existing_credits',
+                    'num_dependents', 
+                    'credit_history', 
+                    'checking_status', 
+                    'purpose', 
+                    'savings_status',
+                    'employment', 
+                    'personal_status', 
+                    'other_parties',
+                    'property_magnitude',
+                    'other_payment_plans',
+                    'housing',
+                    'job',
+                    'own_telephone',
+                    'foreign_worker']
+        cat_names = ['credit_history', 
+                     'checking_status',
+                     'purpose',
+                     'savings_status',
+                     'employment',
+                     'personal_status',
+                     'other_parties',
+                     'property_magnitude',
+                     'other_payment_plans',
+                     'housing',
+                     'job',
+                     'own_telephone',
+                     'foreign_worker']
         continuous_names = [x for x in to_keep if x not in cat_names]
         df = df[to_keep]
         df = pd.get_dummies(df)

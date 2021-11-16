@@ -3,10 +3,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-
 #from sklearn.tree import DecisionTreeClassifier
 from sktree.tree import DecisionTreeClassifier
-
 from sklearn.metrics import f1_score, recall_score, precision_score
 
 
@@ -150,9 +148,9 @@ class GlobalDiscrepancyAnalyzer:
         
         #a enlever?
         y_disc_exposition = self.pool.predict_discrepancies(X_exposition)
-        print('Discrepancy segments tree accuracy on nodes:', f1_score(node_y, dt.predict(node_train)))
-        print('... on exposition data', f1_score(y_disc_exposition, dt.predict(X_exposition)))
-        
+        print('Discrepancy segments tree EDR on nodes:', EDR_POIS(node_y, dt.predict(node_train)))
+        print('... on exposition data', EDR_POIS(y_disc_exposition, dt.predict(X_exposition)))
+
         feature = dt.tree_.feature
         threshold = dt.tree_.threshold
         
@@ -185,14 +183,10 @@ class GlobalDiscrepancyAnalyzer:
                 (segment_purity_expo < min_purity_expo)):
                 continue
             
-            # get accuracy of clf in segment on expo
+            # get accuracy of clef in segment on expo
             #preds_segment_expo = self.pool.predict(X_segment_expo) #PROBLEME ICI CAR X_expo categorielles ont ete mises à 0;1
             preds_segment_expo = prediction_X_expo.iloc[np.where(leaves_expo == leaf_index)[0], :]
-            segment_accuracy_expo = {c: f1_score(y_segment_expo, preds_segment_expo[c]) for c in preds_segment_expo.columns}
-            
-            # get accuracy of clf in segment on expo over preds with discrepancies
-            #preds_segment_expo = prediction_X_expo.iloc[np.where((leaves_expo == leaf_index) * )[0], :]
-            #segment_accuracy_expo = {c: f1_score(y_segment_expo, preds_segment_expo[c]) for c in preds_segment_expo.columns}
+            segment_accuracy_expo = {c: EDR_POIS(y_segment_expo, preds_segment_expo[c]) for c in preds_segment_expo.columns}
 
             # get segment size
             n_nodes_segment = len(np.where(node_leaves == leaf_index)[0]) / node_leaves.shape[0]
@@ -234,7 +228,7 @@ class GlobalDiscrepancyAnalyzer:
             print("Percent of the discrepancy nodes contained here: {n_nodes}".format(n_nodes=n_disc_nodes_segment))
             print("Segment purity: {purity}".format(purity=segment_purity))
             print("Segment purity (X_expo): {purity_expo}".format(purity_expo=segment_purity_expo))
-            print("Accuracy of classifiers (F1 on X_expo) on segment: {acc_segment}".format(acc_segment=segment_accuracy_expo))
+            print("Accuracy of classifiers (EDR on X_expo) on segment: {acc_segment}".format(acc_segment=segment_accuracy_expo))
         print("Number of discrepancy segments found: %i"%len(self.leaf_found))
         
         #save tree (useful for other stuff...not clean). it was saved twice!
@@ -270,7 +264,12 @@ def get_tree_path(dt, representant):
 def get_segment_characteristics(segment_index, dt, X_expo):    
     return 1
     
-
+def EDR_POIS(y, yhat):
+    #loss=torch.mean(torch.exp(xbeta)-y*xbeta)
+    #loss=torch.mean(yhat-y*torch.log(yhat))
+    eps=0.000000000001
+    res=1-np.mean((y*np.log((y+eps)/yhat)-(y-yhat)))/np.mean((y*np.log((y+eps)/np.mean(y))))
+    return res
 
     
     

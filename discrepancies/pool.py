@@ -61,7 +61,7 @@ class BasicPool(Pool):
                                #'GB',
                                'XGB',
                                #'LR',
-                               # 'RF200', 'RF100', 
+                               #'RF200', #'RF100', 
                                #'KNN5'
                                 ]):
         
