@@ -3,15 +3,21 @@ import pandas as pd
 import numpy as np
 
 #from autosklearn.classification import AutoSklearnClassifier
+#from autogluon import TabularPrediction as task
 
-from autogluon import TabularPrediction as task
+#from tpot import TPOTClassifier
+
 
 from sklearn.base import BaseEstimator, ClassifierMixin
 
 import sklearn.datasets
 import sklearn.svm
 import sklearn.ensemble
+import sklearn.neighbors
 import sklearn.tree
+import sklearn.metrics
+import xgboost as xgb
+import sklearn.linear_model
 
 class Pool(BaseEstimator, ClassifierMixin):
 
@@ -50,8 +56,14 @@ class Pool(BaseEstimator, ClassifierMixin):
 
 
 class BasicPool(Pool):
-
-    def __init__(self, models=['SVMrbf', 'SVMpoly', 'SVMsigmoid', 'RF']):
+    def __init__(self, models=['SVMrbf', 
+                               #'SVMsigmoid'#,
+                               #'GB',
+                               'XGB',
+                               #'LR',
+                               #'RF200', #'RF100', 
+                               #'KNN5'
+                                ]):
         
         self._model_types = models
 
@@ -65,7 +77,7 @@ class BasicPool(Pool):
         self.models = {}
 
         if 'SVMrbf' in self._model_types:
-            clf = sklearn.svm.SVC(kernel='rbf')
+            clf = sklearn.svm.SVC(kernel='rbf', probability=True)
             clf.fit(X,y)
             self.models['SVMrbf'] = clf
 
@@ -79,14 +91,44 @@ class BasicPool(Pool):
             clf.fit(X,y)
             self.models['SVMsigmoid'] = clf
 
-        if 'RF' in self._model_types:
-            clf = sklearn.ensemble.RandomForestClassifier()
+        if 'RF50' in self._model_types:
+            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=50)
             clf.fit(X,y)
-            self.models['RF'] = clf
+            self.models['RF50'] = clf
+            
+        if 'RF100' in self._model_types:
+            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=200, max_depth=3)
+            clf.fit(X,y)
+            self.models['RF100'] = clf
+            
+        if 'RF200' in self._model_types:
+            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=200, max_depth=10)
+            clf.fit(X,y)
+            self.models['RF200'] = clf
+            
+        if 'KNN5' in self._model_types:
+            clf = sklearn.neighbors.KNeighborsClassifier(n_neighbors=15)
+            clf.fit(X,y)
+            self.models['KNN5'] = clf
+        
+        if 'XGB' in self._model_types:
+            clf = xgb.XGBClassifier(max_depth=10)
+            clf.fit(X,y)
+            self.models['XGB'] = clf
+            
+        if 'LR' in self._model_types:
+            clf = sklearn.linear_model.LogisticRegression()
+            clf.fit(X,y)
+            self.models['LR'] = clf
+            
+        if 'GB' in self._model_types:
+            clf = sklearn.ensemble.GradientBoostingClassifier(n_estimators=200)
+            clf.fit(X,y)
+            self.models['GB'] = clf
 
         return self
 
-    def predict(self, X, mode='discrepancies'):
+    def predict(self, X, mode='classification'):
 
         if mode == 'discrepancies':
             preds = self.predict_discrepancies(X)
@@ -126,7 +168,133 @@ class BasicPool(Pool):
     def predict_mode(self, X):
         preds = self.predict(X)
         return preds.mode(axis=1)
+    
+    def get_performances(self, X, y):
 
+        preds = self.predict(X)
+        f1_scores = {}
+        for c in self.models:
+            f1_scores[c] = sklearn.metrics.f1_score(y, preds[c])
+        return f1_scores
+
+    
+class BasicPool2(Pool):
+    def __init__(self, models=[#'RF1', 'RF2', 
+                               'RF3', 'RF4', 'RF5'
+                                #'XGB1','XGB2','XGB3','XGB4'
+                                ]):
+        
+        self._model_types = models
+
+
+    def fit(self, X, y):
+        """
+        X: pd.DataFrame, training set's input
+        y: pd.DataFrame, training set's target
+        """
+
+        self.models = {}
+        if 'RF1' in self._model_types:
+            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=200, max_depth=5, criterion='gini')
+            clf.fit(X,y)
+            self.models['RF1'] = clf
+        
+        if 'RF2' in self._model_types:
+            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=200, max_depth=4, criterion='gini')
+            clf.fit(X,y)
+            self.models['RF2'] = clf
+        
+        if 'RF3' in self._model_types:
+            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=200, max_depth=20, criterion='gini')
+            clf.fit(X,y)
+            self.models['RF3'] = clf
+            
+        if 'RF4' in self._model_types:
+            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=200, max_depth=None, criterion='gini')
+            clf.fit(X,y)
+            self.models['RF4'] = clf
+            
+        if 'RF5' in self._model_types:
+            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=200, max_depth=10, criterion='gini')
+            clf.fit(X,y)
+            self.models['RF5'] = clf
+        
+        
+        
+        ####
+            
+        if 'XGB1' in self._model_types:
+            clf = xgb.XGBClassifier(max_depth=3)
+            clf.fit(X,y)
+            self.models['XGB1'] = clf
+            
+        if 'XGB2' in self._model_types:
+            clf = xgb.XGBClassifier(max_depth=5)
+            clf.fit(X,y)
+            self.models['XGB2'] = clf
+            
+        if 'XGB3' in self._model_types:
+            clf = xgb.XGBClassifier(max_depth=10)
+            clf.fit(X,y)
+            self.models['XGB3'] = clf
+            
+        if 'XGB4' in self._model_types:
+            clf = xgb.XGBClassifier(max_depth=None)
+            clf.fit(X,y)
+            self.models['XGB4'] = clf
+            
+        return self
+
+    def predict(self, X, mode='classification'):
+
+        if mode == 'discrepancies':
+            preds = self.predict_discrepancies(X)
+
+        elif mode == 'classification':
+            preds = {}
+            for p in self.models:
+                preds[p] = self.models[p].predict(X)
+            preds = pd.DataFrame(preds)
+
+        return preds
+
+    def predict_proba(self, X, target=0):
+
+        preds = {}
+        for p in self.models:
+            try:
+                preds[p] = self.models[p].predict_proba(X)[:,target]
+            except:
+                a = np.empty((len(X),))
+                a[:] = np.nan
+                preds[p] = a
+        preds = pd.DataFrame(preds)
+
+        return preds
+
+    def predict_discrepancies(self, X):
+        """
+        return 0 if no discrepancy between classifier for the prediction, return 1 if there are discrepancies
+        """
+        preds = self.predict(X, mode='classification')
+        preds = preds.nunique(axis=1)
+        # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
+        return (preds>1).astype(int)
+
+
+    def predict_mode(self, X):
+        preds = self.predict(X)
+        return preds.mode(axis=1)
+    
+    def get_performances(self, X, y):
+
+        preds = self.predict(X)
+        f1_scores = {}
+        for c in self.models:
+            f1_scores[c] = sklearn.metrics.f1_score(y, preds[c])
+        return f1_scores
+
+    
 
 class AutoSklearnPool(Pool):
 
@@ -288,3 +456,88 @@ class AutogluonPool(Pool):
         leaderboard = self.predictor.leaderboard(test_data, silent=True)
 
         return performance, leaderboard
+    
+    
+'''
+class TPOTPool(Pool):
+
+    def __init__(self, max_delta_accuracies=0.05):
+        self.max_delta_accuracies = max_delta_accuracies
+
+
+    def fit(self, X, y, output_directory, time_limit=100):
+
+        self.X_columns = X.columns.to_list()
+        train_data = self.get_df_4_tpot(X,y)
+
+        self.predictor = TPOTClassifier(verbosity=2, max_time_mins=2, max_eval_time_mins=0.04, population_size=40)        
+        tpot.fit(train_data.iloc[:, :-1], train_data[:, -1])
+        
+        # introducing delta max accuracies for autogluon
+        test_data = self.get_df_4_tpot(X, y)
+        leaderboard = self.predictor.leaderboard(test_data, silent=True)
+        lowerbound_accuracy = np.max(leaderboard['score_test'])*(1-self.max_delta_accuracies)
+        accuracies = leaderboard['score_test']
+        self.predictor.delete_models(models_to_keep=leaderboard[leaderboard.score_test >= lowerbound_accuracy]['model'].tolist(), dry_run=False)
+        
+        #hotfix to align with autosklearn's nomenclature
+        self.models = self.predictor.get_model_names()
+        print('apres suppression')
+        print(self.models)
+        return self
+    
+    
+
+    def predict(self, X, mode='classification', models_to_include=None):
+        
+        if not (isinstance(X,pd.DataFrame) or isinstance(X,task.Dataset)):
+            X = pd.DataFrame(X, columns=self.X_columns)
+
+        if mode == 'classification':
+
+            preds = {}
+            for p in self.predictor.get_model_names():
+                if (models_to_include is None) or (p in models_to_include):
+                    preds[p] = self.predictor.predict(X, model=p)
+                
+            preds = pd.DataFrame(preds)
+
+        elif mode == 'autogluon':
+
+            preds = self.predictor.predict_proba(X, as_multiclass=True)
+
+
+        return preds
+
+
+    def predict_discrepancies(self, X):
+        """
+        return 0 if no discrepancy between classifier for the prediction, return 1 if there are discrepancies
+        """
+
+        preds = self.predict(X)
+        preds = preds.nunique(axis=1)
+        # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
+        return (preds>1).astype(int)
+
+
+    def get_df_4_tpot(self, X, y):
+        """
+        X: pd.DataFrame, input data
+        y: pd.Series, 1D target
+        """
+
+        df = pd.concat((X,y), axis=1)
+        df.columns = X.columns.to_list()+['class']
+        
+        return df
+
+
+    def get_performances(self, X, y):
+
+        test_data = self.get_df_4_autogluon(X, y)
+
+        performance = self.predictor.evaluate(test_data)
+        leaderboard = self.predictor.leaderboard(test_data, silent=True)
+
+        return performance, leaderboard'''

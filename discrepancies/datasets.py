@@ -5,6 +5,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.datasets import load_breast_cancer, load_wine, fetch_20newsgroups_vectorized, fetch_kddcup99, make_moons, fetch_openml
 
+from sklearn.manifold import *
+
 
 RANDOM_STATE = 42
 
@@ -32,6 +34,8 @@ def get_dataset(dataset='half-moons',
 
 
     """
+    
+    cat_names = []
 
     if dataset == 'breast-cancer':
         data = load_breast_cancer(return_X_y=False)
@@ -66,6 +70,13 @@ def get_dataset(dataset='half-moons',
         y = (y=='P').astype('int')#.values
         feature_names = data.feature_names
         target_names = data.target_names
+        
+    elif dataset == 'boston-reg':
+        data = fetch_openml(data_id=531, return_X_y=False)
+        X = data.data
+        y = data.target
+        feature_names = data.feature_names
+        target_names = data.target_names
     
     elif dataset == 'credit-card': # Warning: 1) Huge dataset. 2) Etremely Imbalanced: Accuracy not appropriate, use Recall/F1
         data = fetch_openml(data_id=1597, return_X_y=False)
@@ -77,18 +88,21 @@ def get_dataset(dataset='half-moons',
     elif dataset == 'churn': # Warning: Imbalanced! Accuracy not appropriate, use Recall/F1
         data = fetch_openml(data_id=40701, return_X_y=False)
         df = pd.DataFrame(data.data, columns=data.feature_names)
-        del df['area_code'] #drop categorical attribute
+        #del df['area_code'] #drop categorical attribute
+        cat_names = ['area_code']#, 'education']#, 'marital-status', 'occupation', 'relationship', 'native-country']
+        continuous_names = [x for x in df.columns if x not in cat_names]
         X = df.values
         feature_names = df.columns
         y = data.target.astype('int')#.values
         target_names = data.target_names
 
-        #idx = np.random.choice(df.index, 1000)
-        #X, y = X[idx, :], y[idx]
+        idx = np.random.choice(df.index, 5000)
+        X, y = X[idx, :], y[idx]
     
     elif dataset == 'news': # Warning: Imbalanced! Accuracy not appropriate, use Recall/F1
         data = fetch_openml(data_id=4545, return_X_y=False)
         df = pd.DataFrame(data.data, columns=data.feature_names)
+        del df['url']
         X = df.values
         feature_names = df.columns
         y = data.target.astype('int')#.values
@@ -107,10 +121,91 @@ def get_dataset(dataset='half-moons',
         target_names = data.target_names
     
     
+    elif dataset == 'adult-num': # Warning: Imbalanced! Accuracy not appropriate, use Recall/F1
+        data = fetch_openml(data_id=1590, return_X_y=False)
+        df = pd.DataFrame(data.data, columns=data.feature_names)
+        to_keep  = ['capital-gain', 'age', 'capital-loss', 'education-num', 'hours-per-week']
+        #cat_names = ['sex']
+        continuous_names = list(set(to_keep) - set(cat_names))
+        df = df[to_keep]
+        df = pd.get_dummies(df)
+        cat_names = list(set(df.columns) - set(continuous_names))
+        X = df.values
+        feature_names = df.columns
+        y = (data.target=='>50K').astype('int')#.values
+        target_names = data.target_names
         
-        
+        print('taking only 5000 instances')
+        idx = np.random.choice(df.index, 5000, replace=False)
+        X, y = X[idx, :], y[idx]
         
 
+    elif dataset == 'adult-cat':
+        data = fetch_openml(data_id=1590, return_X_y=False)
+        df = pd.DataFrame(data.data, columns=data.feature_names)
+        to_keep  = ['capital-gain', 'age', 'capital-loss', 'education-num', 'hours-per-week', 'sex', 'race', 'education', 'marital-status', 'occupation', 'relationship', 'native-country']
+        cat_names = ['sex', 'race', 'education', 'marital-status', 'occupation', 'relationship', 'native-country']
+        continuous_names = [x for x in to_keep if x not in cat_names]
+        df = df[to_keep]
+        df = pd.get_dummies(df)
+        cat_names = [x for x in list(df.columns) if x not in continuous_names]
+        X = df.values
+        feature_names = df.columns
+        y = (data.target=='>50K').astype('int')#.values
+        target_names = data.target_names
+        
+        print('taking only 3000 instances')
+        idx = np.random.choice(df.index, 3000, replace=False)
+        X, y = X[idx, :], y[idx]
+        
+    elif dataset == 'german':
+        data = fetch_openml(data_id=31, return_X_y=False)
+        df = pd.DataFrame(data.data, columns=data.feature_names)
+        to_keep  = ['duration',
+                    'credit_amount',
+                    'installment_commitment',
+                    'residence_since',
+                    'age',
+                    'existing_credits',
+                    'num_dependents', 
+                    'credit_history', 
+                    'checking_status', 
+                    'purpose', 
+                    'savings_status',
+                    'employment', 
+                    'personal_status', 
+                    'other_parties',
+                    'property_magnitude',
+                    'other_payment_plans',
+                    'housing',
+                    'job',
+                    'own_telephone',
+                    'foreign_worker']
+        cat_names = ['credit_history', 
+                     'checking_status',
+                     'purpose',
+                     'savings_status',
+                     'employment',
+                     'personal_status',
+                     'other_parties',
+                     'property_magnitude',
+                     'other_payment_plans',
+                     'housing',
+                     'job',
+                     'own_telephone',
+                     'foreign_worker']
+        continuous_names = [x for x in to_keep if x not in cat_names]
+        df = df[to_keep]
+        df = pd.get_dummies(df)
+        cat_names = [x for x in list(df.columns) if x not in continuous_names]
+        X = df.values
+        feature_names = df.columns
+        y = (data.target=='good').astype('int')#.values
+        target_names = data.target_names
+        
+        #print('taking only 1000 instances')
+        #idx = np.random.choice(df.index, 10000, replace=False)
+        #X, y = X[idx, :], y[idx]
 
     else:
         raise ValueError
@@ -131,5 +226,5 @@ def get_dataset(dataset='half-moons',
     X_train = pd.DataFrame(X_train, index=y_train.index, columns=feature_names)
     X_test = pd.DataFrame(X_test, index=y_test.index, columns=feature_names)
 
-    return X_train, X_test, y_train, y_test, scaler, feature_names, target_names
+    return X_train, X_test, y_train, y_test, scaler, feature_names, target_names, cat_names
 
