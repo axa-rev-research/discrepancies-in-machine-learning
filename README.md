@@ -1,6 +1,8 @@
 # When ML models improvise (without being asked to): DIG
 
 This repository contains the code for DIG (Discrepancy Interval Generation), a tool to detect and understand where discrepancies from models that have been trained on a same dataset lie in the feature space.
+Link to the article: https://arxiv.org/abs/2104.05467
+
 
 An example of how to run DIG can be found in the "notebooks" folder.
 
