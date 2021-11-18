@@ -1,3 +1,7 @@
 networkx
 mxnet<2.0.0
-autogluon
+pandas
+numpy
+seaborn
+scikit-learn
+heapq
