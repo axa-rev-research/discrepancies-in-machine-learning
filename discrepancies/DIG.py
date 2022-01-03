@@ -24,7 +24,7 @@ logging.basicConfig()
 logging.getLogger().setLevel(logging.INFO)
 
 
-class pool2graph:
+class Digger:
 
     def __init__(self, Xtrain, Ytrain, pool, k_init=10, categorical_names=[]):
 
@@ -65,8 +65,8 @@ class pool2graph:
 
         Returns
         -------
-        self : pool2graph
-            Fitted pool2graph
+        self : Digger
+            Fitted Digger
         """
         
         ## Pre-compute for each point the predictions of each classifier of the pool

@@ -14,9 +14,9 @@ from sklearn.metrics import f1_score, recall_score, precision_score
 class GlobalDiscrepancyAnalyzer:
     
     
-    def __init__(self, p2g, pool, intervals, X, categorical_names=None):
+    def __init__(self, digger, pool, intervals, X, categorical_names=None):
         self.intervals = intervals
-        self.p2g = p2g
+        self.digger = digger
         self.categorical_names = categorical_names
         self.continuous_names = [c for c in X.columns if c not in categorical_names]
         self.X = X.copy()
@@ -65,7 +65,7 @@ class GlobalDiscrepancyAnalyzer:
         """
         Output dataset: one row for each node that was in a discrepancy area.
         """
-        self.disc_nodes_dataset = [n[1]['features'] for n in self.p2g.G.nodes(data=True) if n[1]['discrepancies'] == 1]
+        self.disc_nodes_dataset = [n[1]['features'] for n in self.digger.G.nodes(data=True) if n[1]['discrepancies'] == 1]
         self.disc_nodes_dataset = pd.DataFrame(self.disc_nodes_dataset)
         if len(self.categorical_names) > 0:
             self.disc_nodes_dataset[self.categorical_names] = (self.disc_nodes_dataset[self.categorical_names] > 0).astype('int')
@@ -76,12 +76,12 @@ class GlobalDiscrepancyAnalyzer:
         """
         Output dataset: one row for each node that was in a discrepancy area.
         """
-        self.nodes_dataset = [n[1]['features'] for n in self.p2g.G.nodes(data=True)]
+        self.nodes_dataset = [n[1]['features'] for n in self.digger.G.nodes(data=True)]
         self.nodes_dataset = pd.DataFrame(self.nodes_dataset)
         if len(self.categorical_names) > 0:
             self.nodes_dataset[self.categorical_names] = (self.nodes_dataset[self.categorical_names] > 0).astype('int')
             
-        discs = np.array([n[1]['discrepancies'] for n in self.p2g.G.nodes(data=True)])
+        discs = np.array([n[1]['discrepancies'] for n in self.digger.G.nodes(data=True)])
         self.nodes_dataset["discrepancies"] = discs
         print("Nodes dataset (self.nodes_dataset): shape", self.nodes_dataset.shape)
         
