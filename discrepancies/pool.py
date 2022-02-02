@@ -36,7 +36,7 @@ class Pool(BaseEstimator, ClassifierMixin):
     def predict_discrepancies(self):
         pass
 
-    def agreement(self, x):
+    def agreement(self, X):
         pred_agreement = {}
 
         i = 1
@@ -161,9 +161,10 @@ class BasicPool(Pool):
         """
         preds = self.predict(X, mode='classification')
         preds = preds.nunique(axis=1)
-        # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
-        return (preds>1).astype(int)
-
+        # Return 1 (True) if the class predicted for one instance is not unique, 0 (False) if all the predictions are equal
+        preds = (preds>1).astype(int)
+        preds.name = 'discrepancies'
+        return preds
 
     def predict_mode(self, X):
         preds = self.predict(X)
@@ -278,9 +279,10 @@ class BasicPool2(Pool):
         """
         preds = self.predict(X, mode='classification')
         preds = preds.nunique(axis=1)
-        # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
-        return (preds>1).astype(int)
-
+        # Return 1 (True) if the class predicted for one instance is not unique, 0 (False) if all the predictions are equal
+        preds = (preds>1).astype(int)
+        preds.name = 'discrepancies'
+        return preds
 
     def predict_mode(self, X):
         preds = self.predict(X)
@@ -368,8 +370,10 @@ class AutoSklearnPool(Pool):
         """
         preds = self.predict(X, mode='classification')
         preds = preds.nunique(axis=1)
-        # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
-        return (preds>1).astype(int)
+        # Return 1 (True) if the class predicted for one instance is not unique, 0 (False) if all the predictions are equal
+        preds = (preds>1).astype(int)
+        preds.name = 'discrepancies'
+        return preds
 
 
     def predict_mode(self, X):
@@ -432,8 +436,10 @@ class AutogluonPool(Pool):
 
         preds = self.predict(X)
         preds = preds.nunique(axis=1)
-        # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
-        return (preds>1).astype(int)
+        # Return 1 (True) if the class predicted for one instance is not unique, 0 (False) if all the predictions are equal
+        preds = (preds>1).astype(int)
+        preds.name = 'discrepancies'
+        return preds
 
 
     def get_df_4_autogluon(self, X, y):
