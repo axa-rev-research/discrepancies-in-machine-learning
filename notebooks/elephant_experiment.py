@@ -58,6 +58,8 @@ def setup_experiment(_DATASETS, _POOL, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_S
                 pool_run = pool.BasicPool()
                 pool_run = pool_run.fit(DATASETS[d]['X_train'], DATASETS[d]['y_train'])
                 print(pool_run.get_performances(DATASETS[d]['X_train'], DATASETS[d]['y_train']))
+                if _MAX_DELTA_ACCURACIES < 999.0:
+                    print(1)
             elif p == 'AutoGluon':
                 pool_run = pool.AutogluonPool(max_delta_accuracies=_MAX_DELTA_ACCURACIES)
                 pool_run = pool_run.fit(DATASETS[d]['X_train'], DATASETS[d]['y_train'], output_directory=None)
@@ -120,13 +122,12 @@ def test_fidelity(p2g, run, X, pool, output_dir):
     OUTPUT_DIR = output_dir
    
     scores = elephant_evaluation.discrepancy_score(p2g, run, X, pool, method='knn')
+    n_generated = len([n for n in p2g.G.nodes if n < 0])
     
-    df = pd.DataFrame([scores])
-    df.columns = ["f1_score"]
+    df = pd.DataFrame({"f1_score":[scores], "n_generated":[n_generated]})
     df.to_feather(OUTPUT_DIR+'/'+str(run.run_suffix)+'_PREDS.feather')
-
     
-        
+
 def exec_run(run, datasets, pools, output_dir):
     DATASETS = datasets
     POOLS = pools
@@ -138,8 +139,7 @@ def exec_run(run, datasets, pools, output_dir):
     p2g = pool2graph.pool2graph(DATASETS[run.dataset]['X_train'],
                                 DATASETS[run.dataset]['y_train'],
                                 POOLS[run.dataset][run.pool],
-                                k_init=run.k_init)#,
-                                #k_refinement=run.k_refinement)
+                                k_init=run.k_init)
     
     p2g.fit(max_epochs=run.max_epochs)
     

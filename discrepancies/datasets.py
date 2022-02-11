@@ -8,13 +8,14 @@ from sklearn.datasets import load_breast_cancer, load_wine, fetch_20newsgroups_v
 from sklearn.manifold import *
 
 
-RANDOM_STATE = 42
+#RANDOM_STATE = 42
 
 def get_dataset(dataset='half-moons',
                 n_samples=1000,
                 test_size=0.33,
                 standardize=True,
-                noise=0.3):
+                noise=0.3,
+                RANDOM_STATE=None):
     """
     dataset: str, name of the dataset to load in {'breast-cancer', 'half-moons'}
     n_samples: int, number of instances to return in total (train+test). For synthetic datasets, number of generated instances. For real datasets, number of randomly drawn instances.
@@ -96,8 +97,8 @@ def get_dataset(dataset='half-moons',
         y = data.target.astype('int')#.values
         target_names = data.target_names
 
-        idx = np.random.choice(df.index, 5000)
-        X, y = X[idx, :], y[idx]
+        #idx = np.random.choice(df.index, 5000)
+        #X, y = X[idx, :], y[idx]
     
     elif dataset == 'news': # Warning: Imbalanced! Accuracy not appropriate, use Recall/F1
         data = fetch_openml(data_id=4545, return_X_y=False)
@@ -157,7 +158,23 @@ def get_dataset(dataset='half-moons',
         print('taking only 3000 instances')
         idx = np.random.choice(df.index, 3000, replace=False)
         X, y = X[idx, :], y[idx]
+    
+    elif dataset == 'mnist':
+        data = fetch_openml(data_id=554, return_X_y=False)
+        X = data.data
+        print(X.shape)
+        df = pd.DataFrame(X)
+        y = data.target
+        y = y.astype('int').values
+        #y = (y=='P').astype('int')#.values
+        feature_names = []#data.feature_names
+        target_names = data.target_names
         
+        #print('taking only 3000 instances')
+        #idx = np.random.choice(range(X.shape[0]), 3000, replace=False)
+        #X, y = X[idx, :], y[idx]
+    
+    
     elif dataset == 'german':
         data = fetch_openml(data_id=31, return_X_y=False)
         df = pd.DataFrame(data.data, columns=data.feature_names)

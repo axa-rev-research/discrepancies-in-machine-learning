@@ -11,6 +11,7 @@ import pandas as pd
 
 from sklearn.neighbors import NearestNeighbors, KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
+import xgboost as xgb
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.manifold import TSNE
 
@@ -195,9 +196,11 @@ class pool2graph:
         to_refine = []
 
         # First iteration - to avoid the test at each loop
+        
         e = heappop(self.heapq)
         to_refine.append(e)
         threshold = e[0]/2.
+        
 
         # Check which edges can be included in this batch of refinement to preserve the order of processing (longest edges first) - and homogenize the length of refined edges
         while self.heapq:
@@ -207,11 +210,10 @@ class pool2graph:
                 break
             else:
                 to_refine.append(e)
-
         to_refine = np.array(to_refine, dtype=object)
         
         ## Step 2: pre-compute the positions of the new nodes in the feature space, their blackbox' label and their distance to their nodes (edge being split)
-        
+
         u, v, w = [],[],[]
         for i in range(len(to_refine)):
             u.append(self.G.nodes[to_refine[i,1][0]]['features'])
@@ -497,10 +499,15 @@ class pool2graph:
 
 
    
-    def predict_discrepancies_from_graph(self, X, method='knn', k_neighbors=1):
+    def predict_discrepancies_from_graph(self, X, method='knn', k_neighbors=1, parallel=False):
         """Predict discrepancies (yes / no) using closest nodes from the graph
         
         """
+        
+        if parallel == True:
+            n_jobs = -1
+        else:
+            n_jobs = 1
         
         lnodes = self.get_nodes()
         features, pool_predictions, y_true, ground_truth = self.get_nodes_attributes(lnodes)
@@ -509,11 +516,16 @@ class pool2graph:
         if method == 'knn':
         
             print('knn')
-            clf = KNeighborsClassifier(n_neighbors=k_neighbors, algorithm='auto')
+            clf = KNeighborsClassifier(n_neighbors=k_neighbors, algorithm='auto', n_jobs=n_jobs)
             
         elif method == 'rf':
             print('rf!')
-            clf = RandomForestClassifier(n_estimators=200)
+            clf = RandomForestClassifier(n_estimators=200, n_jobs=n_jobs)
+            
+        elif method == 'xgb':
+            print('xgb')
+            clf = xgb.XGBClassifier(n_estimators=200, max_depth=10, n_jobs=n_jobs)
+            
         elif method == 'tree':
             print('tree')
             clf = DecisionTreeClassifier(max_depth=None, class_weight='balanced')

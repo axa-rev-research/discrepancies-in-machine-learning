@@ -2,6 +2,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from sklearn.metrics import pairwise_distances
 
 
 #from sklearn.tree import DecisionTreeClassifier
@@ -65,8 +66,11 @@ class GlobalDiscrepancyAnalyzer:
         """
         Output dataset: one row for each node that was in a discrepancy area.
         """
-        self.disc_nodes_dataset = [n[1]['features'] for n in self.p2g.G.nodes(data=True) if n[1]['discrepancies'] == 1]
-        self.disc_nodes_dataset = pd.DataFrame(self.disc_nodes_dataset)
+        #self.disc_nodes_dataset = [n[1]['features'] for n in self.p2g.G.nodes(data=True) if n[1]['discrepancies'] == 1]
+        #self.disc_nodes_dataset = pd.DataFrame(self.disc_nodes_dataset)
+        
+        self.disc_nodes_dataset = self.p2g.get_nodes(discrepancies=True)
+        self.disc_nodes_dataset = pd.DataFrame([n[1]['features'] for n in self.disc_nodes_dataset], index=[n[0] for n in self.disc_nodes_dataset])
         if len(self.categorical_names) > 0:
             self.disc_nodes_dataset[self.categorical_names] = (self.disc_nodes_dataset[self.categorical_names] > 0).astype('int')
             
@@ -76,12 +80,14 @@ class GlobalDiscrepancyAnalyzer:
         """
         Output dataset: one row for each node that was in a discrepancy area.
         """
-        self.nodes_dataset = [n[1]['features'] for n in self.p2g.G.nodes(data=True)]
-        self.nodes_dataset = pd.DataFrame(self.nodes_dataset)
+        
+        nodes_data = self.p2g.G.nodes(data=True)
+        self.nodes_dataset = [n[1]['features'] for n in nodes_data]
+        self.nodes_dataset = pd.DataFrame(self.nodes_dataset, index=[n[0] for n in nodes_data])
         if len(self.categorical_names) > 0:
             self.nodes_dataset[self.categorical_names] = (self.nodes_dataset[self.categorical_names] > 0).astype('int')
             
-        discs = np.array([n[1]['discrepancies'] for n in self.p2g.G.nodes(data=True)])
+        discs = np.array([n[1]['discrepancies'] for n in nodes_data])
         self.nodes_dataset["discrepancies"] = discs
         print("Nodes dataset (self.nodes_dataset): shape", self.nodes_dataset.shape)
         
@@ -90,6 +96,180 @@ class GlobalDiscrepancyAnalyzer:
     #######################
     # MACROS FOR ANALYSIS #
     #######################
+    
+    def get_closest_intervals_from_x(self, x, intervals, k=1, parallel=False):
+    
+        n_jobs = -1 if parallel==True else 1
+    
+        distances = pairwise_distances(x.values.reshape(1, -1), self.disc_nodes_dataset, n_jobs=n_jobs)
+        idx_closest = self.disc_nodes_dataset.iloc[np.argsort(-1 * distances)[0,:], :].index 
+        closest_nodes_iter = iter(idx_closest)
+        interval_list = []
+        while len(interval_list) < k:
+            intclos = next(closest_nodes_iter)
+
+            for ci in intervals:
+                if intclos in ci.path:
+                    interval_list.append(ci.border_features)
+                if len(interval_list) == k:
+                    break
+        return interval_list
+    
+    def local_intervals(self, instance, intervals, scaler, k=1, savefig=False, savefolder='results', savefname='localinterval', parallel=False):
+        sns.set_style("white")
+
+        Fblue = '#07519e'
+        Fblue2 = '#2ba8e0'
+        Fgreen = '#47DBCD'
+        Fpink = '#F3A0F2'
+        Fpurple = '#83236a'
+        Fviolet = '#661D98'
+        Famber = '#F5B14C'
+        
+        closest_k_intervals = self.get_closest_intervals_from_x(instance, intervals, k, parallel)
+        aggregatedf = pd.concat(closest_k_intervals)
+        interval_relevant = pd.DataFrame([aggregatedf.max(), aggregatedf.min()])
+
+        #interval_scaled = pd.DataFrame(scaler.inverse_transform(interval_relevant))
+        #interval_scaled.columns = X_train.columns
+        #amplitude = pd.DataFrame(interval_scaled.iloc[0, :] - interval_scaled.iloc[1, :])
+        #amplitude_normalized = interval_relevant.iloc[0, :] - interval_relevant.iloc[1, :]
+        
+        cont_names = self.continuous_names
+        cat_names = self.categorical_names
+        
+        # centered
+        interval_relevant2 = interval_relevant - instance
+        
+        
+        Xcols = self.X.columns[:-1]
+        instance_orig_space = pd.DataFrame(scaler.inverse_transform(instance.values.reshape(1, -1)), columns=Xcols)
+
+        
+        XMIN = (self.X[cont_names] - instance[cont_names]).min().min()
+        XMAX = (self.X[cont_names] - instance[cont_names]).max().max()
+
+        fig, (ax1, ax2) = plt.subplots(2,1, figsize=(8,8))
+
+
+        cont_names = [f for f in Xcols if f in cont_names]
+
+        for i in range(len(cont_names)):
+            #DISCREPANCY INTERVALS
+            DISCR_LEFT = float(interval_relevant2[cont_names[i]].min())
+            DISCR_RIGHT = float(interval_relevant2[cont_names[i]].max())
+            DISCR_WIDTH = DISCR_RIGHT - DISCR_LEFT
+
+            ### Left
+            if i == 0:
+                ax1.barh(y=i,left=XMIN-10.0, height=1.0, 
+                         width=DISCR_LEFT-(XMIN-10.0), 
+                         color="#118AB2", edgecolor='k', alpha=0.1, label="Unanimous prediction: 0")
+
+                ### Right
+                ax1.barh(y=i,left=DISCR_RIGHT, height=1.0, 
+                         width=DISCR_RIGHT+30.0, 
+                         color="#EF476F", edgecolor='k', alpha=0.1, label="Unanimous prediction: 1")
+                ### Middle
+                ax1.barh(y=i,left=DISCR_LEFT, height=1.0, 
+                         width=DISCR_WIDTH, 
+                         color="#06D6A0", edgecolor='k', alpha=0.7, label="Discrepancy Interval")
+
+            else:
+                ### Left
+                ax1.barh(y=i,left=XMIN-10.0, height=1.0, 
+                         width=DISCR_LEFT-(XMIN-10.0), 
+                         color="#118AB2", edgecolor='k', alpha=0.1)
+
+                ### Right
+                ax1.barh(y=i,left=DISCR_RIGHT, height=1.0, 
+                         width=DISCR_RIGHT+30.0, 
+                         color="#EF476F", edgecolor='k', alpha=0.1)
+                ### Middle
+                ax1.barh(y=i,left=DISCR_LEFT, height=1.0, 
+                         width=DISCR_WIDTH, 
+                         color="#06D6A0", edgecolor='k', alpha=0.7)
+
+
+
+            #coordonnée instance
+            ax1.text(x=XMIN-0.9, y=i-0.1, 
+                     s=round(float(instance_orig_space.iloc[:, i]), 4), color='black',
+                    rotation=-0, fontsize=12)
+
+            #min interval
+            ax1.text(x=float(interval_relevant2[cont_names[i]].min()) - 0.6, y=i+0.25, 
+                     s=round(pd.DataFrame(scaler.inverse_transform(interval_relevant), columns=Xcols)[cont_names[i]].min(), 2),
+                     color="#118AB2", rotation=-0, fontsize=10)
+            #max interval
+            ax1.text(x=float(interval_relevant2[cont_names[i]].max()) + 0.1, y=i+0.25, 
+                     s=round(pd.DataFrame(scaler.inverse_transform(interval_relevant), columns=Xcols)[cont_names[i]].max(), 2),
+                     color="#EF476F", rotation=-0, fontsize=10)
+
+        # context: training ranges
+        tmp = self.X[cont_names] - instance[cont_names]
+        tmp = tmp.melt()
+        matchcols = {v:i for i, v in enumerate(cont_names)}
+        tmp.variable = tmp.variable.apply(lambda x: matchcols[x]).astype("str")
+        sns.violinplot(data=tmp, y="variable", x="value", color="#F7E9CF", alpha=1.0, edgecolor=None, inner=None,
+                       ax=ax1)
+
+        ax1.set_yticks(ticks=range(len(cont_names)))   
+        contlabels = cont_names
+        ax1.set_yticklabels(labels=contlabels, fontsize=13, weight="bold")
+        ax1.set_xticks([])
+        #ax1.set_xlim((interval_relevant2[cont_names].values.min()-2.0, interval_relevant2[cont_names].values.max()+2.0))
+        ax1.vlines(x=0, ymin=-1.5, ymax = len(cont_names)+1.5, color='black', linewidth=6, alpha=1, label="Instance $x_0$ coordinates")
+
+
+        ax1.set_xlim( XMIN - 1.0,
+                     XMAX + 1.0)
+        ax1.set_ylim((-0.5, i+0.5))
+
+
+        ax1.legend(fontsize=12)
+        ax1.set_xlabel(None)
+        ax1.set_ylabel(None)
+
+        plt.tight_layout()
+        if savefig == True:
+            plt.savefig('../../' + savefolder + '/' + savefname + '.pdf')
+        plt.show()
+
+        ###TABLE
+        same_cat = list(np.array(cat_names)[np.where((interval_relevant[cat_names]>=0).astype('int').mean() * instance[cat_names])])
+        variable_names= ["credit_history", "checking_status", "saving_status", "employment", 
+                         "purpose", "personal_status", "own_telephone" ,"foreign_worker",
+                        "other_parties","property_magnitude", "housing", "other_payments", "job"]
+
+        out = []
+        for v in same_cat:
+            for v2 in variable_names:
+                if v2 in v:
+                    _, mod = v.split(v2+'_')
+                    out.append(['$\mathbf{%s}$'%v2.replace('_', '\_'), mod])
+
+        out = np.array(out)
+        colors_array = np.array(["#06D6A0", "#06D6A0"]*out.shape[0]).reshape(out.shape[0], 2)
+        table = ax2.table(cellText=out,
+                               #colWidths = [1.0, 1.0],
+                               rowLabels=None,
+                               loc='center',
+                          cellColours=colors_array)
+        for cell in table._cells:
+            table._cells[cell].set_alpha(.1)
+        table.set_fontsize(14)
+        table.scale(1.0, 1.5)
+        ax2.axis("off")
+
+        plt.tight_layout()
+
+        #plt.savefig('../../results/interval_german_withcat5.pdf')
+        plt.show()
+            
+            
+
+    
     
     def get_global_discrepancy_importances(self, min_expo=0):
         """
@@ -135,7 +315,7 @@ class GlobalDiscrepancyAnalyzer:
         #inspired from https://scikit-learn.org/stable/auto_examples/tree/plot_unveil_tree_structure.html
         
         prediction_X_expo = self.pool.predict(X_exposition)
-        
+
         if len(self.categorical_names) > 0:
             X_exposition[self.categorical_names] = (X_exposition[self.categorical_names] > 0).astype('int')
         
@@ -272,7 +452,7 @@ def get_segment_characteristics(segment_index, dt, X_expo):
     
 
 
-    
+
     
     
     

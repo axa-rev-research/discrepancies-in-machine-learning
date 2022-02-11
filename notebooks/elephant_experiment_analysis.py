@@ -46,7 +46,6 @@ def get_expe_results(run):
     
         path = str(OUTPUT_DIR)+'/'+repl
         df_plan = pd.read_feather(path+'/'+'expe_plan.feather')
-        print(df_plan)
 
         res_i = {}
         for i,r in df_plan.iterrows():
@@ -54,21 +53,18 @@ def get_expe_results(run):
             try:
                 preds = pd.read_feather(path+'/'+r.run_suffix+'_PREDS.feather')
                 
-                competitors = ['scores']
-                
-                res_i[str(r.run_suffix)] = {c: preds.values.mean() for c in competitors}
-
+                competitors = ["f1_score", "precision_score", "recall_score", "n_generated"]
+                res_i[str(r.run_suffix)] = {competitors[c]: preds.values.mean(axis=0)[c] for c in range(len(competitors))}
             except:
                 print("Couldn't open results for "+str(r.run_suffix))
-    
+        
         res_i = pd.DataFrame(res_i).T
         df_plan = df_plan.set_index('run_suffix')
         df = pd.concat((df_plan,res_i), axis=1)
-
-        df = df.melt(id_vars=['pool','dataset','k_init','k_refinement','max_epochs','k_neighbors', 'n_sampling'], 
-            var_name="competitor", 
-            value_name="f1_score")
+        #print(df.head(10))
         
+        #df = df.melt(id_vars=['pool','dataset','k_init','k_refinement','max_epochs','k_neighbors', 'n_sampling', "n_generated"])
+        #print(df.head(10))
         df['n_replication'] = n_repl
 
         res[n_repl] = df        

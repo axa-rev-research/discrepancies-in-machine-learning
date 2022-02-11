@@ -3,6 +3,7 @@ import pandas as pd
 from scipy.spatial.distance import euclidean
 
 
+
 def get_refined_paths_from_node(n, G, n_previous=None):
     """
     From a X_train node (n) in (G), get all the direct path to other X_train nodes (edges of G).
