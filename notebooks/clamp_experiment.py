@@ -12,6 +12,9 @@ from pathlib import Path
 import pathlib, pickle
 from functools import partial
 
+from sklearn.metrics import recall_score, f1_score
+
+
 import sys, os
 sys.path.append(os.path.dirname(sys.path[0]))
 
@@ -31,7 +34,7 @@ def mc_sampling(n_sampling, dim):
     _alphas = np.tile(_alphas.reshape(n_sampling, -1), (1, dim))
     return _alphas
 
-def setup_experiment(_DATASETS, _POOL, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_SAMPLING, _MAX_DELTA_ACCURACIES, OUTPUT_DIR, time_left_for_this_task=30, n_jobs=-1):
+def setup_experiment(_DATASETS, _POOL, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_SAMPLING, _MAX_DELTA_ACCURACIES, OUTPUT_DIR, time_left_for_this_task=30, n_jobs=-1, RANDOM_STATE=None):
 
     _dataset, _pool, _k_init, _k_refinement, _max_epochs, _n_sampling, _run_suffix = [], [], [], [], [], [], []
 
@@ -41,7 +44,7 @@ def setup_experiment(_DATASETS, _POOL, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_S
 
         # Get dataset
         DATASETS[d] = {}
-        DATASETS[d]['X_train'], DATASETS[d]['X_test'], DATASETS[d]['y_train'], DATASETS[d]['y_test'], DATASETS[d]['scaler'], DATASETS[d]['feature_names'], DATASETS[d]['target_names'] = datasets.get_dataset(dataset=d, n_samples=1000, noise=0.3)
+        DATASETS[d]['X_train'], DATASETS[d]['X_test'], DATASETS[d]['y_train'], DATASETS[d]['y_test'], DATASETS[d]['scaler'], DATASETS[d]['feature_names'], DATASETS[d]['target_names'], DATASETS[d]['categorical_names'] = datasets.get_dataset(dataset=d, n_samples=1000, noise=0.3, RANDOM_STATE=RANDOM_STATE)
                 
         # Draw MC eval samples
         MC_SAMPLING[d]={}
@@ -53,8 +56,10 @@ def setup_experiment(_DATASETS, _POOL, _K_INIT, _K_REFINEMENT, _MAX_EPOCHS, _N_S
 
             # Init+fit pool
             if p == 'Basic':
-                pool_run = pool.BasicPool()
+                pool_run = pool.BasicPool(RANDOM_STATE=RANDOM_STATE)
                 pool_run = pool_run.fit(DATASETS[d]['X_train'], DATASETS[d]['y_train'])
+                pool_run = pool_run.filter_accuracies(DATASETS[d]['X_test'], DATASETS[d]['y_test'], _MAX_DELTA_ACCURACIES)
+                print(pool_run.get_performances(DATASETS[d]['X_test'], DATASETS[d]['y_test']))
             elif p == 'AutoGluon':
                 pool_run = pool.AutogluonPool(max_delta_accuracies=_MAX_DELTA_ACCURACIES)
                 pool_run = pool_run.fit(DATASETS[d]['X_train'], DATASETS[d]['y_train'], output_directory=None)
@@ -118,11 +123,10 @@ def test_fidelity(p2g, run, pool, output_dir):
     _alphas = np.random.random(run.n_sampling)
     _alphas = np.tile(_alphas.reshape(run.n_sampling, -1), (1, cf_intervals[0].border_features.shape[1]))
     
-    scores = clamp_evaluation.evaluate_intervals(cf_intervals, pool, run.n_sampling, _alphas)
-       
-
-    df = pd.DataFrame(scores)
-    df.columns = ['scores']
+    precision_all, precision_without_disctrain = clamp_evaluation.evaluate_intervals(cf_intervals, pool, run.n_sampling, _alphas)
+    n_generated = len([n for n in p2g.G.nodes if n < 0])
+    
+    df = pd.DataFrame({"precision_all":[precision_all], "precision_without_disctrain":[precision_without_disctrain], "n_generated":[n_generated]})
     df.to_feather(OUTPUT_DIR+'/'+str(run.run_suffix)+'_PREDS.feather')
 
     
@@ -167,15 +171,16 @@ def main():
 
         time_expe = int(time.time())
         for i in range(N_REPLICATION):
+            print('============== ITERATION %i'%i)
             
-            OUTPUT_DIR = pathlib.Path(str(pathlib.Path('../..').resolve())+'/results/'+str(time_expe)+'#'+str(expe)+'_'+str(i))
+            OUTPUT_DIR = pathlib.Path(str(pathlib.Path('../..').resolve())+'/results_clamps/'+str(time_expe)+'#'+str(expe)+'_'+str(i))
             OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
             OUTPUT_DIR = str(OUTPUT_DIR)+'/'
 
-            df_expe_plan, DATASETS, MC_SAMPLING, POOLS = setup_experiment(DATASETS, POOL, K_INIT, K_REFINEMENT, MAX_EPOCHS, N_SAMPLING, MAX_DELTA_ACCURACIES, OUTPUT_DIR, time_left_for_this_task=30, n_jobs=-1)
+            df_expe_plan, DATASETS, MC_SAMPLING, POOLS = setup_experiment(DATASETS, POOL, K_INIT, K_REFINEMENT, MAX_EPOCHS, N_SAMPLING, MAX_DELTA_ACCURACIES, OUTPUT_DIR, time_left_for_this_task=30, n_jobs=-1, RANDOM_STATE=i)
             runs = df_expe_plan.iterrows()
 
-            with Pool(N_JOBS) as p:
+            with Pool(N_JOBS) as p: ### Conséquence de ça: il vaut mieux mettre un nombre d'expes par itération ( K * epochs * dataset * etc. ) qui soit un multiple du nombre de workers max. Car sinon il laisse des workers rien faire en attendant d'avoir fini la première itération.
                 p.map(partial(exec_run, datasets=DATASETS, pools=POOLS, output_dir=OUTPUT_DIR), runs)    
     
 
