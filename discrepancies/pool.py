@@ -58,15 +58,15 @@ class Pool(BaseEstimator, ClassifierMixin):
 class BasicPool(Pool):
     def __init__(self, models=['SVMrbf', 
                                #'SVMsigmoid'#,
-                               #'GB',
+                               'GB',
                                'XGB',
-                               #'LR',
-                               #'RF200', #'RF100', 
-                               #'KNN5'
-                                ]):
+                               'LR',
+                               'RF200', 'RF100', 
+                               'KNN5'
+                                ], RANDOM_STATE=None):
         
         self._model_types = models
-
+        self.RANDOM_STATE = RANDOM_STATE
 
     def fit(self, X, y):
         """
@@ -77,54 +77,59 @@ class BasicPool(Pool):
         self.models = {}
 
         if 'SVMrbf' in self._model_types:
-            clf = sklearn.svm.SVC(kernel='rbf', probability=True)
+            clf = sklearn.svm.SVC(kernel='rbf', probability=True, random_state=self.RANDOM_STATE)
             clf.fit(X,y)
             self.models['SVMrbf'] = clf
 
         if 'SVMpoly' in self._model_types:
-            clf = sklearn.svm.SVC(kernel='poly')
+            clf = sklearn.svm.SVC(kernel='poly', random_state=self.RANDOM_STATE)
             clf.fit(X,y)
             self.models['SVMpoly'] = clf
 
         if 'SVMsigmoid' in self._model_types: 
-            clf = sklearn.svm.SVC(kernel='sigmoid')
+            clf = sklearn.svm.SVC(kernel='sigmoid', random_state=self.RANDOM_STATE)
             clf.fit(X,y)
             self.models['SVMsigmoid'] = clf
 
         if 'RF50' in self._model_types:
-            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=50)
+            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=50, random_state=self.RANDOM_STATE)
             clf.fit(X,y)
             self.models['RF50'] = clf
             
         if 'RF100' in self._model_types:
-            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=200, max_depth=3)
+            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=200, max_depth=3, random_state=self.RANDOM_STATE)
             clf.fit(X,y)
             self.models['RF100'] = clf
             
         if 'RF200' in self._model_types:
-            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=200, max_depth=10)
+            clf = sklearn.ensemble.RandomForestClassifier(n_estimators=200, max_depth=10, random_state=self.RANDOM_STATE)
             clf.fit(X,y)
             self.models['RF200'] = clf
             
         if 'KNN5' in self._model_types:
-            clf = sklearn.neighbors.KNeighborsClassifier(n_neighbors=15)
+            clf = sklearn.neighbors.KNeighborsClassifier(n_neighbors=20)
             clf.fit(X,y)
             self.models['KNN5'] = clf
         
         if 'XGB' in self._model_types:
-            clf = xgb.XGBClassifier(max_depth=10)
+            clf = xgb.XGBClassifier(max_depth=10, random_state=self.RANDOM_STATE)
             clf.fit(X,y)
             self.models['XGB'] = clf
             
         if 'LR' in self._model_types:
-            clf = sklearn.linear_model.LogisticRegression()
+            clf = sklearn.linear_model.LogisticRegression(random_state=self.RANDOM_STATE)
             clf.fit(X,y)
             self.models['LR'] = clf
             
         if 'GB' in self._model_types:
-            clf = sklearn.ensemble.GradientBoostingClassifier(n_estimators=200)
+            clf = sklearn.ensemble.GradientBoostingClassifier(n_estimators=200, random_state=self.RANDOM_STATE)
             clf.fit(X,y)
             self.models['GB'] = clf
+            
+        if 'DT' in self._model_types:
+            clf = sklearn.tree.DecisionTreeClassifier(min_samples_leaf=5, random_state=self.RANDOM_STATE)
+            clf.fit(X,y)
+            self.models['DT'] = clf
 
         return self
 
@@ -161,7 +166,7 @@ class BasicPool(Pool):
         """
         preds = self.predict(X, mode='classification')
         preds = preds.nunique(axis=1)
-        # Return 1 (True) if the class predicted for one instance is not unique, 0 (False) if all the predictions are equal
+        # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
         preds = (preds>1).astype(int)
         preds.name = 'discrepancies'
         return preds
@@ -177,6 +182,17 @@ class BasicPool(Pool):
         for c in self.models:
             f1_scores[c] = sklearn.metrics.f1_score(y, preds[c])
         return f1_scores
+    
+    def filter_accuracies(self, X, y, max_delta_accuracies=1000.0):
+        
+        try:
+            f1_scores = self.get_performances(X, y)
+            best_ = max(f1_scores.values())
+            models_tokeep_ = [k for k, v in f1_scores.items() if v >= best_ - max_delta_accuracies]
+            self.models = {k:self.models[k] for k in models_tokeep_}
+        except AttributeError:
+            print("Pool must be trained before filtering.")
+        return self
 
     
 class BasicPool2(Pool):
@@ -279,10 +295,11 @@ class BasicPool2(Pool):
         """
         preds = self.predict(X, mode='classification')
         preds = preds.nunique(axis=1)
-        # Return 1 (True) if the class predicted for one instance is not unique, 0 (False) if all the predictions are equal
+        # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
         preds = (preds>1).astype(int)
         preds.name = 'discrepancies'
         return preds
+
 
     def predict_mode(self, X):
         preds = self.predict(X)
@@ -370,8 +387,8 @@ class AutoSklearnPool(Pool):
         """
         preds = self.predict(X, mode='classification')
         preds = preds.nunique(axis=1)
-        # Return 1 (True) if the class predicted for one instance is not unique, 0 (False) if all the predictions are equal
-        preds = (preds>1).astype(int)
+        # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
+        preds =  (preds>1).astype(int)
         preds.name = 'discrepancies'
         return preds
 
@@ -436,7 +453,7 @@ class AutogluonPool(Pool):
 
         preds = self.predict(X)
         preds = preds.nunique(axis=1)
-        # Return 1 (True) if the class predicted for one instance is not unique, 0 (False) if all the predictions are equal
+        # Return True if the class predicted for one instance is not unique, False if all the predictions are equal
         preds = (preds>1).astype(int)
         preds.name = 'discrepancies'
         return preds
